@@ -1,0 +1,12 @@
+// Test query for StormEvents data
+StormEvents
+| take 10
+
+// Alternative query to test table existence
+StormEvents
+| count
+
+// Another test query to see table structure
+StormEvents
+| getschema
+| take 10

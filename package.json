@@ -1,0 +1,121 @@
+{
+  "name": "kustox",
+  "displayName": "KustoX - Modern Kusto Explorer",
+  "description": "A powerful Visual Studio Code extension designed to modernize and simplify your data exploration workflow with AI capabilities",
+  "version": "0.1.0",
+  "publisher": "kustox",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Belkhiria/KustoX.git"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Data Science",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "kusto",
+        "aliases": [
+          "Kusto",
+          "KQL",
+          "kusto"
+        ],
+        "extensions": [
+          ".kql",
+          ".kusto"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "kustox.openExplorer",
+        "title": "Open KustoX Explorer",
+        "category": "KustoX"
+      },
+      {
+        "command": "kustox.helloWorld",
+        "title": "Hello World",
+        "category": "KustoX"
+      },
+      {
+        "command": "kustox.createKustoFile",
+        "title": "Create New Kusto File",
+        "category": "KustoX"
+      },
+      {
+        "command": "kustox.configureConnection",
+        "title": "Configure Connection",
+        "category": "KustoX",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "kustox.executeQuery",
+        "title": "Execute Query",
+        "category": "KustoX",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kustox.disconnect",
+        "title": "Disconnect",
+        "category": "KustoX",
+        "icon": "$(disconnect)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "kustox.executeQuery",
+          "when": "resourceExtname == .kql || resourceExtname == .kusto",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "kustox.executeQuery",
+          "when": "resourceExtname == .kql || resourceExtname == .kusto"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "kustox.executeQuery",
+        "key": "f5",
+        "when": "resourceLangId == kusto"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "16.x",
+    "@types/uuid": "^10.0.0",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.15.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.10.2",
+    "@azure/msal-node": "^3.6.4",
+    "azure-kusto-data": "^7.0.1",
+    "azure-kusto-ingest": "^7.0.1",
+    "uuid": "^11.1.0"
+  }
+}
