@@ -68,6 +68,18 @@
         "title": "Disconnect",
         "category": "KustoX",
         "icon": "$(disconnect)"
+      },
+      {
+        "command": "kustox.runIntegrationTests",
+        "title": "Run Integration Tests",
+        "category": "KustoX",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kustox.runComprehensiveTests",
+        "title": "Run Comprehensive Tests",
+        "category": "KustoX",
+        "icon": "$(checklist)"
       }
     ],
     "menus": {

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { registerIntegrationTests } from './test/integrationTests';
+import { registerComprehensiveTests } from './test/comprehensiveTests';
 
 // Dynamic imports for azure-kusto-data
 let KustoClient: any;
@@ -353,11 +355,17 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             return;
         }
 
-        // Clean the query (remove comments and empty lines for execution)
-        const cleanQuery = query.split('\n')
-            .map(line => line.trim())
-            .filter(line => line && !line.startsWith('//'))
-            .join('\n');
+        // Clean the query (remove only comment lines and empty lines, preserve all other content)
+        const lines = query.split('\n');
+        const cleanLines = lines
+            .map(line => line.trimRight()) // Remove trailing whitespace but preserve leading whitespace for formatting
+            .filter(line => {
+                const trimmedLine = line.trim();
+                // Keep the line if it's not empty and doesn't start with //
+                return trimmedLine.length > 0 && !trimmedLine.startsWith('//');
+            });
+        
+        const cleanQuery = cleanLines.join('\n').trim();
 
         if (!cleanQuery.trim()) {
             vscode.window.showErrorMessage('No executable query found. Please write a Kusto query (non-comment lines).');
@@ -400,22 +408,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 
                 progress.report({ increment: 80, message: "Processing results..." });
 
-                // Log the complete response for debugging
-                console.log('=== COMPLETE KUSTO RESPONSE DEBUG ===');
-                console.log('Response type:', typeof response);
-                console.log('Response constructor:', response?.constructor?.name);
-                console.log('Response toString:', response?.toString?.());
-                console.log('Response keys:', Object.keys(response || {}));
-                console.log('Full response object:', response);
-                
-                // Try different methods to access the data
-                if (response && typeof response.toJson === 'function') {
-                    console.log('Response toJson():', response.toJson());
-                }
-                if (response && typeof response.toTable === 'function') {
-                    console.log('Response toTable():', response.toTable());
-                }
-
                 // Process the response using official patterns
                 const results = processKustoResponse(response, executionTime);
                 
@@ -437,13 +429,8 @@ print "🚀 KustoX is ready! Configure your connection to get started."
 
     function processKustoResponse(response: any, executionTimeMs: number): any {
         try {
-            console.log('=== PROCESSING KUSTO RESPONSE ===');
-            console.log('Response type:', typeof response);
-            console.log('Response constructor:', response?.constructor?.name);
-            
             // The Azure Kusto SDK returns a KustoResponseDataSetV2 object
             if (!response || !response.primaryResults || response.primaryResults.length === 0) {
-                console.log('No primary results found');
                 return {
                     columns: ['Result'],
                     rows: [['Query executed successfully but returned no data']],
@@ -455,33 +442,21 @@ print "🚀 KustoX is ready! Configure your connection to get started."
 
             // Get the first primary result table
             const primaryTable = response.primaryResults[0];
-            console.log('Primary table:', primaryTable);
-            console.log('Primary table name:', primaryTable.name);
-            console.log('Primary table kind:', primaryTable.kind);
-            console.log('Primary table columns:', primaryTable.columns);
-            console.log('Primary table _rows length:', primaryTable._rows?.length);
 
             // Extract column names
             const columns = primaryTable.columns.map((col: any) => col.columnName || col.name || 'Column');
-            console.log('Extracted columns:', columns);
 
             // Extract rows from the _rows property (this is the actual data)
             const rows: any[][] = [];
             if (primaryTable._rows && Array.isArray(primaryTable._rows)) {
-                console.log('Processing rows from _rows array, length:', primaryTable._rows.length);
-                
-                primaryTable._rows.forEach((row: any[], index: number) => {
-                    console.log(`Row ${index}:`, row);
+                primaryTable._rows.forEach((row: any[]) => {
                     const formattedRow = row.map(cell => formatCellValue(cell));
                     rows.push(formattedRow);
                 });
             } else {
-                console.log('No _rows array found, trying rows() iterator method');
-                
                 // Try the rows() iterator method as fallback
                 try {
                     for (const kustoRow of primaryTable.rows()) {
-                        console.log('KustoResultRow:', kustoRow);
                         // KustoResultRow has a 'raw' property with the actual data
                         const rowData = kustoRow.raw || Object.values(kustoRow).filter(val => 
                             val !== kustoRow.columns && Array.isArray(val)
@@ -491,12 +466,9 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                         rows.push(formattedRow);
                     }
                 } catch (iteratorError) {
-                    console.log('Iterator method failed:', iteratorError);
+                    // Silently handle iterator errors
                 }
             }
-
-            console.log('Final extracted rows count:', rows.length);
-            console.log('Sample rows (first 2):', rows.slice(0, 2));
 
             const executionTime = executionTimeMs < 1000 
                 ? `${executionTimeMs}ms` 
@@ -512,7 +484,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             };
 
         } catch (error) {
-            console.error('Error processing Kusto response:', error);
             return {
                 columns: ['Error'],
                 rows: [['Failed to process query results: ' + (error instanceof Error ? error.message : 'Unknown error')]],
@@ -771,6 +742,12 @@ print "🚀 KustoX is ready! Configure your connection to get started."
     }
 
     context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnection, executeQuery, disconnectKusto);
+
+    // Register integration tests
+    registerIntegrationTests(context);
+    
+    // Register comprehensive tests
+    registerComprehensiveTests(context);
 
     // Show a welcome message when the extension activates
     vscode.window.showInformationMessage('KustoX extension loaded! Use "KustoX: Configure Connection" to connect to your cluster.');
