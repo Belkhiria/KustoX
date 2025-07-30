@@ -1,0 +1,79 @@
+// Sample Kusto queries with render commands for testing chart visualizations
+// Each query demonstrates different chart types available in KustoX
+
+// 1. Column Chart - Shows event counts by state (your original example)
+StormEvents
+| summarize EventCount = count() by State
+| top 10 by EventCount
+| render columnchart;
+
+// 2. Bar Chart - Same data but horizontal bars
+StormEvents
+| summarize EventCount = count() by State
+| top 10 by EventCount
+| render barchart;
+
+// 3. Pie Chart - Distribution of event types
+StormEvents
+| summarize EventCount = count() by EventType
+| top 8 by EventCount
+| render piechart;
+
+// 4. Time Chart - Events over time
+StormEvents
+| where StartTime >= ago(365d)
+| summarize EventCount = count() by bin(StartTime, 30d)
+| order by StartTime asc
+| render timechart;
+
+// 5. Line Chart - Damage trends over time
+StormEvents
+| where DamageProperty > 0
+| summarize AvgDamage = avg(DamageProperty) by bin(StartTime, 60d)
+| order by StartTime asc
+| render linechart;
+
+// 6. Area Chart - Cumulative events over time
+StormEvents
+| where StartTime >= ago(180d)
+| summarize EventCount = count() by bin(StartTime, 7d)
+| order by StartTime asc
+| extend CumulativeEvents = row_cumsum(EventCount)
+| project StartTime, CumulativeEvents
+| render areachart;
+
+// 7. Scatter Plot - Damage vs Deaths relationship
+StormEvents
+| where DamageProperty > 0 and DeathsDirect >= 0
+| project DamageProperty, DeathsDirect
+| sample 100  // Limit data points for better visualization
+| render scatterchart;
+
+// 8. Multi-series Column Chart - Events by type and year
+StormEvents
+| extend Year = getyear(StartTime)
+| where Year >= 2020
+| summarize EventCount = count() by EventType, Year
+| evaluate pivot(Year, sum(EventCount))
+| render columnchart;
+
+// 9. Complex Time Series - Multiple metrics
+StormEvents
+| where StartTime >= ago(90d)
+| summarize 
+    TotalEvents = count(),
+    TotalDamage = sum(DamageProperty),
+    TotalDeaths = sum(DeathsDirect)
+    by bin(StartTime, 7d)
+| order by StartTime asc
+| render timechart;
+
+// 10. Comparative Bar Chart - Top states by different metrics
+StormEvents
+| summarize 
+    EventCount = count(),
+    TotalDamage = sum(DamageProperty),
+    TotalDeaths = sum(DeathsDirect)
+    by State
+| top 8 by EventCount
+| render barchart;

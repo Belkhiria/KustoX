@@ -611,16 +611,23 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         panel.webview.html = getErrorWebviewContent(query, errorDetails, connection);
     }
     function getResultsWebviewContent(query, results, connection) {
+        // Detect if query contains render command for visualization
+        const renderMatch = query.match(/\|\s*render\s+(\w+)/i);
+        const chartType = renderMatch ? renderMatch[1].toLowerCase() : null;
+        const hasVisualization = chartType && ['columnchart', 'barchart', 'piechart', 'timechart', 'linechart', 'areachart', 'scatterchart'].includes(chartType);
         const tableRows = results.rows.map((row) => `<tr>${row.map((cell) => `<td title="${cell}">${cell}</td>`).join('')}</tr>`).join('');
         const statusClass = results.hasData ? 'success' : 'warning';
         const statusIcon = results.hasData ? '✓' : '⚠️';
         const statusText = results.hasData ? 'Query executed successfully' : 'Query executed with no data';
+        // Generate chart HTML if visualization is requested
+        const chartHtml = hasVisualization ? generateChartHtml(results, chartType) : '';
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Kusto Query Results</title>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <style>
                 body {
                     font-family: var(--vscode-font-family);
@@ -655,6 +662,50 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     display: flex;
                     align-items: center;
                     gap: 5px;
+                }
+                .results-tabs {
+                    display: flex;
+                    margin-bottom: 20px;
+                    border-bottom: 1px solid var(--vscode-panel-border);
+                }
+                .tab-button {
+                    padding: 10px 20px;
+                    background: none;
+                    border: none;
+                    color: var(--vscode-foreground);
+                    cursor: pointer;
+                    border-bottom: 2px solid transparent;
+                    font-family: var(--vscode-font-family);
+                }
+                .tab-button.active {
+                    border-bottom-color: var(--vscode-charts-blue);
+                    color: var(--vscode-charts-blue);
+                    font-weight: bold;
+                }
+                .tab-button:hover {
+                    background-color: var(--vscode-list-hoverBackground);
+                }
+                .tab-content {
+                    display: none;
+                }
+                .tab-content.active {
+                    display: block;
+                }
+                .chart-container {
+                    background-color: var(--vscode-editor-background);
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    border: 1px solid var(--vscode-panel-border);
+                    position: relative;
+                    height: 400px;
+                }
+                .chart-title {
+                    text-align: center;
+                    margin-bottom: 20px;
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: var(--vscode-charts-blue);
                 }
                 table {
                     width: 100%;
@@ -726,7 +777,32 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     <span>📋</span>
                     <span><strong>Columns:</strong> ${results.columns.length}</span>
                 </div>
+                ${hasVisualization ? `<div class="stat-item"><span>📈</span><span><strong>Chart:</strong> ${chartType}</span></div>` : ''}
             </div>
+
+            ${hasVisualization ? `
+            <div class="results-tabs">
+                <button class="tab-button active" onclick="showTab('chart')">📈 Chart</button>
+                <button class="tab-button" onclick="showTab('table')">📋 Table</button>
+            </div>
+
+            <div id="chart-tab" class="tab-content active">
+                ${chartHtml}
+            </div>
+
+            <div id="table-tab" class="tab-content">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>${results.columns.map((col) => `<th>${col}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            ` : `
             <div class="table-container">
                 <table>
                     <thead>
@@ -737,8 +813,290 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     </tbody>
                 </table>
             </div>
+            `}
+
+            <script>
+                function showTab(tabName) {
+                    // Hide all tab contents
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    
+                    // Remove active class from all buttons
+                    document.querySelectorAll('.tab-button').forEach(button => {
+                        button.classList.remove('active');
+                    });
+                    
+                    // Show selected tab content
+                    document.getElementById(tabName + '-tab').classList.add('active');
+                    
+                    // Add active class to clicked button
+                    event.target.classList.add('active');
+                }
+            </script>
         </body>
         </html>`;
+    }
+    // Generate chart HTML for different visualization types
+    function generateChartHtml(results, chartType) {
+        const chartId = `chart-${Date.now()}`;
+        // Prepare data for Chart.js
+        const chartData = prepareChartData(results, chartType);
+        return `
+            <div class="chart-container">
+                <div class="chart-title">${getChartTitle(chartType)} - ${results.rowCount} Data Points</div>
+                <canvas id="${chartId}" width="400" height="300"></canvas>
+            </div>
+            <script>
+                (function() {
+                    const ctx = document.getElementById('${chartId}').getContext('2d');
+                    
+                    // VS Code theme-aware colors
+                    const isDark = document.body.style.backgroundColor !== 'rgb(255, 255, 255)';
+                    const colors = {
+                        primary: isDark ? '#007ACC' : '#0066CC',
+                        secondary: isDark ? '#4FC1FF' : '#0078D4',
+                        success: isDark ? '#89D185' : '#107C10',
+                        warning: isDark ? '#FFD23F' : '#FF8C00',
+                        error: isDark ? '#F85149' : '#D13438',
+                        text: isDark ? '#CCCCCC' : '#333333',
+                        gridLines: isDark ? '#444444' : '#E1E1E1'
+                    };
+
+                    const colorPalette = [
+                        colors.primary, colors.secondary, colors.success, 
+                        colors.warning, colors.error, '#9A73E8', '#FF6B9D', 
+                        '#4ADE80', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'
+                    ];
+
+                    ${generateChartScript(chartData, chartType)}
+                })();
+            </script>
+        `;
+    }
+    // Prepare data for different chart types
+    function prepareChartData(results, chartType) {
+        if (!results.rows || results.rows.length === 0) {
+            return { labels: [], datasets: [] };
+        }
+        const columns = results.columns;
+        const rows = results.rows;
+        // For most charts, assume first column is labels, subsequent columns are data
+        const labels = rows.map((row) => String(row[0] || ''));
+        switch (chartType) {
+            case 'piechart':
+                // For pie chart, use first column as labels, second as values
+                const pieData = rows.map((row) => ({
+                    label: String(row[0] || ''),
+                    value: Number(row[1]) || 0
+                }));
+                return {
+                    labels: pieData.map((d) => d.label),
+                    data: pieData.map((d) => d.value)
+                };
+            case 'timechart':
+            case 'linechart':
+            case 'areachart':
+                // For time series, first column should be datetime
+                const timeData = rows.map((row) => ({
+                    x: row[0],
+                    y: Number(row[1]) || 0
+                }));
+                return {
+                    labels: labels,
+                    datasets: [{
+                            label: columns[1] || 'Value',
+                            data: timeData.map((d) => d.y),
+                            borderColor: '#007ACC',
+                            backgroundColor: chartType === 'areachart' ? 'rgba(0, 122, 204, 0.1)' : undefined,
+                            fill: chartType === 'areachart'
+                        }]
+                };
+            case 'scatterchart':
+                // For scatter, assume x and y coordinates in first two columns
+                const scatterData = rows.map((row) => ({
+                    x: Number(row[0]) || 0,
+                    y: Number(row[1]) || 0
+                }));
+                return {
+                    datasets: [{
+                            label: 'Data Points',
+                            data: scatterData,
+                            backgroundColor: '#007ACC',
+                            borderColor: '#007ACC'
+                        }]
+                };
+            case 'columnchart':
+            case 'barchart':
+            default:
+                // For bar/column charts, create datasets for each numeric column after the first
+                const datasets = [];
+                for (let i = 1; i < columns.length; i++) {
+                    const data = rows.map((row) => Number(row[i]) || 0);
+                    datasets.push({
+                        label: columns[i],
+                        data: data,
+                        backgroundColor: `rgba(0, 122, 204, 0.8)`,
+                        borderColor: '#007ACC',
+                        borderWidth: 1
+                    });
+                }
+                return {
+                    labels: labels,
+                    datasets: datasets.length > 0 ? datasets : [{
+                            label: 'Values',
+                            data: rows.map((row) => Number(row[1]) || 0),
+                            backgroundColor: 'rgba(0, 122, 204, 0.8)',
+                            borderColor: '#007ACC',
+                            borderWidth: 1
+                        }]
+                };
+        }
+    }
+    // Generate Chart.js configuration script
+    function generateChartScript(chartData, chartType) {
+        const isHorizontal = chartType === 'barchart';
+        switch (chartType) {
+            case 'piechart':
+                return `
+                    new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: ${JSON.stringify(chartData.labels)},
+                            datasets: [{
+                                data: ${JSON.stringify(chartData.data)},
+                                backgroundColor: colorPalette.slice(0, ${chartData.labels.length}),
+                                borderWidth: 2,
+                                borderColor: colors.text
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: { color: colors.text }
+                                }
+                            }
+                        }
+                    });
+                `;
+            case 'scatterchart':
+                return `
+                    new Chart(ctx, {
+                        type: 'scatter',
+                        data: ${JSON.stringify(chartData)},
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    type: 'linear',
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                },
+                                y: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: colors.text } }
+                            }
+                        }
+                    });
+                `;
+            case 'timechart':
+            case 'linechart':
+            case 'areachart':
+                return `
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: ${JSON.stringify(chartData)},
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                },
+                                y: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: colors.text } }
+                            }
+                        }
+                    });
+                `;
+            case 'barchart':
+                return `
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: ${JSON.stringify(chartData)},
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y',
+                            scales: {
+                                x: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                },
+                                y: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: colors.text } }
+                            }
+                        }
+                    });
+                `;
+            case 'columnchart':
+            default:
+                return `
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: ${JSON.stringify(chartData)},
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                },
+                                y: {
+                                    grid: { color: colors.gridLines },
+                                    ticks: { color: colors.text }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: colors.text } }
+                            }
+                        }
+                    });
+                `;
+        }
+    }
+    // Get user-friendly chart titles
+    function getChartTitle(chartType) {
+        const titles = {
+            'columnchart': 'Column Chart',
+            'barchart': 'Bar Chart',
+            'piechart': 'Pie Chart',
+            'timechart': 'Time Series Chart',
+            'linechart': 'Line Chart',
+            'areachart': 'Area Chart',
+            'scatterchart': 'Scatter Plot'
+        };
+        return titles[chartType] || 'Chart';
     }
     function getErrorWebviewContent(query, errorDetails, connection) {
         // Handle both old string format and new detailed format for backward compatibility
