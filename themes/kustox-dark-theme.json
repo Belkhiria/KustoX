@@ -1,0 +1,209 @@
+{
+  "name": "KustoX Dark Theme",
+  "type": "dark",
+  "semanticHighlighting": true,
+  "colors": {
+    "editor.background": "#1e1e1e",
+    "editor.foreground": "#d4d4d4",
+    "editorLineNumber.foreground": "#858585",
+    "editorLineNumber.activeForeground": "#c6c6c6"
+  },
+  "tokenColors": [
+    {
+      "name": "Comments",
+      "scope": [
+        "comment",
+        "comment.line.double-slash.kusto",
+        "comment.block.kusto"
+      ],
+      "settings": {
+        "fontStyle": "italic",
+        "foreground": "#6A9955"
+      }
+    },
+    {
+      "name": "Strings",
+      "scope": [
+        "string",
+        "string.quoted.double.kusto",
+        "string.quoted.single.kusto",
+        "string.quoted.other.kusto"
+      ],
+      "settings": {
+        "foreground": "#CE9178"
+      }
+    },
+    {
+      "name": "Numbers",
+      "scope": [
+        "constant.numeric",
+        "constant.numeric.decimal.kusto",
+        "constant.numeric.hex.kusto",
+        "constant.numeric.binary.kusto"
+      ],
+      "settings": {
+        "foreground": "#B5CEA8"
+      }
+    },
+    {
+      "name": "DateTime and Time",
+      "scope": [
+        "constant.other.datetime.kusto",
+        "constant.other.timespan.kusto",
+        "constant.other.time.kusto"
+      ],
+      "settings": {
+        "foreground": "#D7BA7D"
+      }
+    },
+    {
+      "name": "Keywords - Control Flow",
+      "scope": [
+        "keyword.control.kusto"
+      ],
+      "settings": {
+        "foreground": "#C586C0",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Keywords - Tabular Operators",
+      "scope": [
+        "keyword.other.tabular.kusto"
+      ],
+      "settings": {
+        "foreground": "#569CD6",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Keywords - Aggregation Functions",
+      "scope": [
+        "keyword.other.aggregation.kusto"
+      ],
+      "settings": {
+        "foreground": "#4EC9B0",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Keywords - Join Types",
+      "scope": [
+        "keyword.other.jointype.kusto"
+      ],
+      "settings": {
+        "foreground": "#FF8C00",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Operators - Logical",
+      "scope": [
+        "keyword.operator.logical.kusto"
+      ],
+      "settings": {
+        "foreground": "#C586C0",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Operators - Comparison",
+      "scope": [
+        "keyword.operator.comparison.kusto"
+      ],
+      "settings": {
+        "foreground": "#D4D4D4"
+      }
+    },
+    {
+      "name": "Operators - Arithmetic",
+      "scope": [
+        "keyword.operator.arithmetic.kusto"
+      ],
+      "settings": {
+        "foreground": "#D4D4D4"
+      }
+    },
+    {
+      "name": "Pipe Operator",
+      "scope": [
+        "keyword.operator.pipe.kusto"
+      ],
+      "settings": {
+        "foreground": "#DCDCAA",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Functions",
+      "scope": [
+        "entity.name.function.kusto"
+      ],
+      "settings": {
+        "foreground": "#DCDCAA"
+      }
+    },
+    {
+      "name": "Table Names",
+      "scope": [
+        "entity.name.type.table.kusto"
+      ],
+      "settings": {
+        "foreground": "#4FC1FF",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Column Names",
+      "scope": [
+        "variable.other.column.kusto"
+      ],
+      "settings": {
+        "foreground": "#9CDCFE"
+      }
+    },
+    {
+      "name": "Variables and Parameters",
+      "scope": [
+        "variable.parameter.kusto"
+      ],
+      "settings": {
+        "foreground": "#FF6B9D"
+      }
+    },
+    {
+      "name": "Constants - Language",
+      "scope": [
+        "constant.language.kusto"
+      ],
+      "settings": {
+        "foreground": "#569CD6",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Punctuation",
+      "scope": [
+        "punctuation.separator.comma.kusto",
+        "punctuation.terminator.semicolon.kusto"
+      ],
+      "settings": {
+        "foreground": "#D4D4D4"
+      }
+    },
+    {
+      "name": "Brackets and Parentheses",
+      "scope": [
+        "punctuation.definition.parameters.begin.kusto",
+        "punctuation.definition.parameters.end.kusto",
+        "punctuation.definition.array.begin.kusto",
+        "punctuation.definition.array.end.kusto",
+        "punctuation.definition.dictionary.begin.kusto",
+        "punctuation.definition.dictionary.end.kusto"
+      ],
+      "settings": {
+        "foreground": "#FFD700"
+      }
+    }
+  ]
+}

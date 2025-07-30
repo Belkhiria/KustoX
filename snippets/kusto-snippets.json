@@ -1,0 +1,251 @@
+{
+  "Let Statement": {
+    "prefix": "let",
+    "body": [
+      "let ${1:variableName} = ${2:value};",
+      "$0"
+    ],
+    "description": "Create a let statement to define a variable"
+  },
+  "Basic Query": {
+    "prefix": "query",
+    "body": [
+      "${1:TableName}",
+      "| where ${2:condition}",
+      "| project ${3:columns}",
+      "| ${4:operation}",
+      "$0"
+    ],
+    "description": "Basic Kusto query template"
+  },
+  "Where Clause": {
+    "prefix": "where",
+    "body": [
+      "| where ${1:condition}",
+      "$0"
+    ],
+    "description": "Add a where clause filter"
+  },
+  "Project Columns": {
+    "prefix": "project",
+    "body": [
+      "| project ${1:column1}, ${2:column2}",
+      "$0"
+    ],
+    "description": "Project specific columns"
+  },
+  "Extend Columns": {
+    "prefix": "extend",
+    "body": [
+      "| extend ${1:newColumn} = ${2:expression}",
+      "$0"
+    ],
+    "description": "Add computed columns"
+  },
+  "Summarize": {
+    "prefix": "summarize",
+    "body": [
+      "| summarize ${1:aggregation} by ${2:groupby}",
+      "$0"
+    ],
+    "description": "Summarize data with aggregation"
+  },
+  "Join Tables": {
+    "prefix": "join",
+    "body": [
+      "| join kind=${1|inner,left,right,fullouter,leftanti,rightanti,leftsemi,rightsemi|} (",
+      "    ${2:TableName}",
+      "    | where ${3:condition}",
+      ") on ${4:joinkey}",
+      "$0"
+    ],
+    "description": "Join two tables"
+  },
+  "Union Tables": {
+    "prefix": "union",
+    "body": [
+      "union ${1:Table1}, ${2:Table2}",
+      "| ${3:operation}",
+      "$0"
+    ],
+    "description": "Union multiple tables"
+  },
+  "Time Range Filter": {
+    "prefix": "timerange",
+    "body": [
+      "| where ${1:TimeColumn} >= ago(${2:7d})",
+      "$0"
+    ],
+    "description": "Filter by time range"
+  },
+  "Top N Results": {
+    "prefix": "top",
+    "body": [
+      "| top ${1:10} by ${2:column} ${3|asc,desc|}",
+      "$0"
+    ],
+    "description": "Get top N results"
+  },
+  "Order By": {
+    "prefix": "order",
+    "body": [
+      "| order by ${1:column} ${2|asc,desc|}",
+      "$0"
+    ],
+    "description": "Order results by column"
+  },
+  "Count Aggregation": {
+    "prefix": "count",
+    "body": [
+      "| summarize count() by ${1:groupby}",
+      "$0"
+    ],
+    "description": "Count records by group"
+  },
+  "Count If": {
+    "prefix": "countif",
+    "body": [
+      "| summarize countif(${1:condition}) by ${2:groupby}",
+      "$0"
+    ],
+    "description": "Count records matching condition"
+  },
+  "Distinct Values": {
+    "prefix": "distinct",
+    "body": [
+      "| distinct ${1:column}",
+      "$0"
+    ],
+    "description": "Get distinct values"
+  },
+  "Parse String": {
+    "prefix": "parse",
+    "body": [
+      "| parse ${1:column} with ${2:pattern}",
+      "$0"
+    ],
+    "description": "Parse string column"
+  },
+  "Parse JSON": {
+    "prefix": "parsejson",
+    "body": [
+      "| extend ${1:parsed} = parse_json(${2:jsonColumn})",
+      "| project ${1:parsed}.${3:property}",
+      "$0"
+    ],
+    "description": "Parse JSON column"
+  },
+  "MV-Expand": {
+    "prefix": "mvexpand",
+    "body": [
+      "| mv-expand ${1:arrayColumn}",
+      "$0"
+    ],
+    "description": "Expand array column to multiple rows"
+  },
+  "Make Series": {
+    "prefix": "makeseries",
+    "body": [
+      "| make-series ${1:aggregation} default=${2:0} on ${3:timeColumn} step ${4:1d} by ${5:groupby}",
+      "$0"
+    ],
+    "description": "Create time series data"
+  },
+  "Render Chart": {
+    "prefix": "render",
+    "body": [
+      "| render ${1|timechart,barchart,columnchart,piechart,scatterchart,areachart,linechart|}",
+      "$0"
+    ],
+    "description": "Render visualization"
+  },
+  "Case Statement": {
+    "prefix": "case",
+    "body": [
+      "case(",
+      "    ${1:condition1}, \"${2:value1}\",",
+      "    ${3:condition2}, \"${4:value2}\",",
+      "    \"${5:defaultValue}\"",
+      ")",
+      "$0"
+    ],
+    "description": "Case/switch statement"
+  },
+  "IIF Statement": {
+    "prefix": "iif",
+    "body": [
+      "iif(${1:condition}, ${2:trueValue}, ${3:falseValue})",
+      "$0"
+    ],
+    "description": "Inline if statement"
+  },
+  "String Contains": {
+    "prefix": "contains",
+    "body": [
+      "| where ${1:column} contains \"${2:searchText}\"",
+      "$0"
+    ],
+    "description": "Filter by string contains"
+  },
+  "String Starts With": {
+    "prefix": "startswith",
+    "body": [
+      "| where ${1:column} startswith \"${2:prefix}\"",
+      "$0"
+    ],
+    "description": "Filter by string starts with"
+  },
+  "In Operator": {
+    "prefix": "in",
+    "body": [
+      "| where ${1:column} in (${2:\"value1\", \"value2\"})",
+      "$0"
+    ],
+    "description": "Filter by value in list"
+  },
+  "Between Operator": {
+    "prefix": "between",
+    "body": [
+      "| where ${1:column} between (${2:start} .. ${3:end})",
+      "$0"
+    ],
+    "description": "Filter by range"
+  },
+  "DateTime Functions": {
+    "prefix": "datetime",
+    "body": [
+      "| extend ${1:newColumn} = ${2|startofday,startofweek,startofmonth,startofyear,endofday,endofweek,endofmonth,endofyear,ago,now|}(${3:timeColumn})",
+      "$0"
+    ],
+    "description": "DateTime manipulation functions"
+  },
+  "String Functions": {
+    "prefix": "stringfunc",
+    "body": [
+      "| extend ${1:newColumn} = ${2|toupper,tolower,strlen,substring,split,replace,trim|}(${3:stringColumn})",
+      "$0"
+    ],
+    "description": "String manipulation functions"
+  },
+  "Search Operator": {
+    "prefix": "search",
+    "body": [
+      "search \"${1:searchTerm}\"",
+      "| where TimeGenerated >= ago(${2:1d})",
+      "$0"
+    ],
+    "description": "Search across multiple tables"
+  },
+  "External Data": {
+    "prefix": "externaldata",
+    "body": [
+      "externaldata(${1:column1}:${2:string}, ${3:column2}:${4:datetime})",
+      "[",
+      "  \"${5:data_url}\"",
+      "]",
+      "with (format=\"${6|csv,json,tsv|}\", ignoreFirstRecord=${7|true,false|})",
+      "$0"
+    ],
+    "description": "Import external data"
+  }
+}

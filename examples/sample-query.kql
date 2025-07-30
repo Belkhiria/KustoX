@@ -1,0 +1,105 @@
+// Sample Kusto Query for testing syntax highlighting
+// This demonstrates various KQL features with proper color coding
+
+// Let statements and variables
+let timeRange = ago(7d);
+let threshold = 100;
+let userList = dynamic(["user1", "user2", "user3"]);
+
+// Basic table query with pipe operations
+StormEvents
+| where StartTime >= timeRange
+| where EventType in ("Tornado", "Thunderstorm Wind")
+| where DamageProperty > threshold
+| project StartTime, EventType, State, DamageProperty, DeathsDirect
+| summarize 
+    TotalEvents = count(),
+    TotalDamage = sum(DamageProperty),
+    MaxDamage = max(DamageProperty),
+    AvgDamage = avg(DamageProperty)
+    by State, EventType
+| order by TotalDamage desc
+| take 10;
+
+// Join operations
+let recentEvents = StormEvents
+| where StartTime >= ago(30d)
+| project EventId, EventType, State, StartTime;
+
+let damageData = StormEvents
+| where DamageProperty > 0
+| project EventId, DamageProperty, DeathsDirect;
+
+recentEvents
+| join kind=inner damageData on EventId
+| where DamageProperty > 50000
+| extend DamageCategory = case(
+    DamageProperty < 100000, "Low",
+    DamageProperty < 1000000, "Medium", 
+    "High"
+)
+| summarize count() by State, DamageCategory;
+
+// Advanced functions and operators
+StormEvents
+| where StartTime between (datetime(2023-01-01) .. datetime(2023-12-31))
+| where EventType contains "Wind" or EventType startswith "Thunder"
+| extend 
+    Year = getyear(StartTime),
+    Month = getmonth(StartTime),
+    EventDuration = EndTime - StartTime,
+    HasCasualties = iff(DeathsDirect > 0 or InjuriesDirect > 0, true, false)
+| where EventDuration > timespan(1h)
+| project-away EventId, Source
+| mv-expand UserImpact = userList
+| parse EventNarrative with * "wind speed of " WindSpeed:int " mph" *
+| where isnotnull(WindSpeed) and WindSpeed >= 60;
+
+// Aggregations and time series
+StormEvents
+| where StartTime >= ago(365d)
+| make-series 
+    EventCount = count(),
+    AvgDamage = avg(DamageProperty)
+    default = 0
+    on StartTime 
+    step 1d
+    by EventType
+| extend 
+    EventCount_MA = series_fir(EventCount, repeat(1, 7), true, true),
+    Trend = series_fit_line(EventCount)
+| project EventType, StartTime, EventCount, EventCount_MA, Trend;
+
+// String operations and parsing
+SecurityEvent
+| where TimeGenerated >= ago(1d)
+| where EventID == 4624  // Successful logon
+| parse Account with Domain "\\" Username
+| extend 
+    AccountLength = strlen(Account),
+    UsernameLower = tolower(Username),
+    IsMachineAccount = iff(endswith(Username, "$"), true, false)
+| where not(IsMachineAccount)
+| summarize LogonCount = count() by Username, Computer
+| top 100 by LogonCount;
+
+// Geospatial and advanced analytics
+StormEvents
+| where isnotnull(BeginLat) and isnotnull(BeginLon)
+| extend Location = pack("lat", BeginLat, "lon", BeginLon)
+| where geo_point_in_circle(BeginLat, BeginLon, 40.7128, -74.0060, 100000) // Within 100km of NYC
+| project StartTime, EventType, BeginLat, BeginLon, DamageProperty
+| render scatterchart with (xcolumn=BeginLon, ycolumns=BeginLat, series=EventType);
+
+// Complex dynamic data manipulation
+Events
+| extend ParsedData = parse_json(Properties)
+| where isnotnull(ParsedData)
+| mv-apply PropertyBag = todynamic(ParsedData) on (
+    extend Key = tostring(bag_keys(PropertyBag)[0])
+    | extend Value = tostring(PropertyBag[Key])
+    | where Key == "severity"
+)
+| project TimeGenerated, EventName, Severity = Value
+| summarize count() by Severity
+| render piechart;

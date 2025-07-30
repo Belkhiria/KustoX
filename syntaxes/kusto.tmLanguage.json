@@ -1,0 +1,241 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kusto Query Language",
+  "scopeName": "source.kusto",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#datetime"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#functions"
+    },
+    {
+      "include": "#table-names"
+    },
+    {
+      "include": "#column-names"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.kusto",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.kusto",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.kusto",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.kusto",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.kusto",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.kusto",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.kusto",
+          "begin": "@\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.kusto",
+              "match": "\"\""
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.decimal.kusto",
+          "match": "\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.hex.kusto",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.kusto",
+          "match": "\\b0[bB][01]+\\b"
+        }
+      ]
+    },
+    "datetime": {
+      "patterns": [
+        {
+          "name": "constant.other.datetime.kusto",
+          "match": "\\bdatetime\\s*\\([^)]+\\)"
+        },
+        {
+          "name": "constant.other.timespan.kusto",
+          "match": "\\btimespan\\s*\\([^)]+\\)"
+        },
+        {
+          "name": "constant.other.time.kusto",
+          "match": "\\b\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?)?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.logical.kusto",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.operator.comparison.kusto",
+          "match": "(==|!=|<>|<=|>=|<|>|=~|!~|contains|!contains|startswith|!startswith|endswith|!endswith|matches|regex|has|!has|in|!in|between)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.kusto",
+          "match": "(\\+|\\-|\\*|/|%|\\^)"
+        },
+        {
+          "name": "keyword.operator.assignment.kusto", 
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.pipe.kusto",
+          "match": "\\|"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.kusto",
+          "match": "\\b(let|declare|set|if|iff|case|materialize|union|join|lookup|invoke|evaluate|fork|facet|search|find|print|datatable)\\b"
+        },
+        {
+          "name": "keyword.other.tabular.kusto",
+          "match": "\\b(where|project|project-away|project-keep|project-rename|project-reorder|extend|summarize|count|top|take|limit|sample|sample-distinct|distinct|sort|order|parse|parse-where|parse-kv|mv-expand|mv-apply|reduce|range|getschema|render|as|on|kind|hints|externaldata|cluster|database|table|toscalar|tostring|todatetime|totimespan|todynamic|toint|tolong|todouble|tobool|isnull|isnotnull|iif|coalesce|binary_and|binary_or|binary_not|binary_xor|bin|floor|ceiling|round|abs|sign|sqrt|exp|log|log10|pow|sin|cos|tan|asin|acos|atan|atan2|degrees|radians|pi|now|ago|startofday|startofweek|startofmonth|startofyear|endofday|endofweek|endofmonth|endofyear|dayofweek|dayofmonth|dayofyear|weekofyear|monthofyear|getyear|getmonth|getday|gethour|getminute|getsecond|todecimal|toreal|dynamic|array_length|array_index_of|array_reverse|array_sort_asc|array_sort_desc|array_slice|array_split|array_concat|bag_keys|bag_merge|bag_remove_keys|treepath|zip|make_bag|make_set|make_list|pack|pack_all|pack_array|unpack|bag_pack|set_has_element|set_intersect|set_union|set_difference|extract|extract_all|extractjson|parse_json|parse_xml|parse_csv|parse_ipv4|parse_ipv6|parse_url|parse_user_agent|format_datetime|format_timespan|strcat|strcat_delim|strlen|substring|split|replace|reverse|toupper|tolower|trim|trim_start|trim_end|indexof|hash|hash_sha256|hash_md5|series_fir|series_fft|series_ifft|series_fit_line|series_fit_2lines|series_outliers|series_periods_detect|series_periods_validate|series_stats|series_stats_dynamic|geo_distance_2points|geo_distance_point_to_line|geo_point_in_circle|geo_point_in_polygon|geo_point_to_geohash|geo_geohash_to_central_point|geo_polygon_to_s2cells|geo_s2cell_to_central_point|ipv4_compare|ipv4_is_match|ipv4_is_private|ipv4_lookup|ipv6_compare|ipv6_is_match|url_encode|url_decode|base64_encode_tostring|base64_decode_tostring|base64_encode_fromguid|base64_decode_toguid|zlib_compress_to_base64_string|zlib_decompress_from_base64_string|gzip_compress_to_base64_string|gzip_decompress_from_base64_string)\\b"
+        },
+        {
+          "name": "keyword.other.aggregation.kusto",
+          "match": "\\b(avg|avgif|count|countif|dcount|dcountif|max|maxif|min|minif|percentile|percentiles|stdev|stdevp|sum|sumif|variance|variancep|any|anyif|arg_max|arg_min|make_bag|make_bag_if|make_list|make_list_if|make_set|make_set_if|buildschema|hll|hll_merge|tdigest|tdigest_merge)\\b"
+        },
+        {
+          "name": "keyword.other.jointype.kusto",
+          "match": "\\b(inner|innerunique|left|leftanti|leftsemi|leftantisemi|right|rightanti|rightsemi|rightantisemi|fullouter)\\b"
+        },
+        {
+          "name": "constant.language.kusto",
+          "match": "\\b(true|false|null|int|long|real|double|bool|string|datetime|timespan|decimal|dynamic|guid)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.kusto",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?=\\s*\\()"
+        }
+      ]
+    },
+    "table-names": {
+      "patterns": [
+        {
+          "name": "entity.name.type.table.kusto",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b(?=\\s*\\|)|\\b[A-Z][a-zA-Z0-9_]*\\b(?=\\s*$)"
+        }
+      ]
+    },
+    "column-names": {
+      "patterns": [
+        {
+          "name": "variable.other.column.kusto",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b(?=\\s*[=<>!])|(?<=\\.)\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.parameter.kusto",
+          "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.comma.kusto",
+          "match": ","
+        },
+        {
+          "name": "punctuation.terminator.semicolon.kusto",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.definition.parameters.begin.kusto",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.definition.parameters.end.kusto",
+          "match": "\\)"
+        },
+        {
+          "name": "punctuation.definition.array.begin.kusto",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.definition.array.end.kusto",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.definition.dictionary.begin.kusto",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.definition.dictionary.end.kusto",
+          "match": "\\}"
+        }
+      ]
+    }
+  }
+}

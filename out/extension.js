@@ -363,12 +363,160 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             });
         }
         catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            vscode.window.showErrorMessage(`❌ Query execution failed: ${errorMessage}`);
+            // Enhanced error handling for detailed Kusto errors
+            let detailedError = parseKustoError(error);
+            vscode.window.showErrorMessage(`❌ Query execution failed: ${detailedError.summary}`);
             console.error('Query execution error:', error);
-            // Show error details in results panel
-            showQueryError(query, errorMessage, kustoConnection);
+            console.error('Parsed error details:', detailedError);
+            // Show detailed error in results panel
+            showQueryError(query, detailedError, kustoConnection);
         }
+    }
+    // Enhanced error parsing for Kusto-specific errors
+    function parseKustoError(error) {
+        let summary = 'Unknown error occurred';
+        let details = '';
+        let code = '';
+        let severity = 'Error';
+        let category = 'General';
+        let oneApiErrors = [];
+        try {
+            // Check if error has response data (common in HTTP errors)
+            if (error?.response?.data) {
+                const responseData = error.response.data;
+                // Check for OneAPI error format (Kusto specific)
+                if (responseData.error && responseData.error.innererror && responseData.error.innererror.message) {
+                    summary = responseData.error.innererror.message;
+                    details = responseData.error.message || summary;
+                    code = responseData.error.code || responseData.error['@type'] || '';
+                }
+                // Standard error format
+                else if (responseData.error && responseData.error.message) {
+                    summary = responseData.error.message;
+                    details = responseData.error.message;
+                    code = responseData.error.code || '';
+                }
+                // Check for OneAPI errors array
+                else if (responseData.error && responseData.error['@odata.errors']) {
+                    const odataErrors = responseData.error['@odata.errors'];
+                    if (Array.isArray(odataErrors) && odataErrors.length > 0) {
+                        const firstError = odataErrors[0];
+                        summary = firstError.message || 'Query parsing error';
+                        details = firstError.message || summary;
+                        code = firstError.code || '';
+                        oneApiErrors = odataErrors;
+                    }
+                }
+                // Try to parse JSON string in error message
+                else if (typeof responseData === 'string') {
+                    try {
+                        const parsed = JSON.parse(responseData);
+                        if (parsed.error && parsed.error.message) {
+                            summary = parsed.error.message;
+                            details = parsed.error.message;
+                            code = parsed.error.code || '';
+                        }
+                    }
+                    catch {
+                        summary = responseData;
+                        details = responseData;
+                    }
+                }
+            }
+            // Check if error message contains structured information
+            else if (error?.message) {
+                const message = error.message;
+                // Try to extract JSON from error message
+                const jsonMatch = message.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        const errorJson = JSON.parse(jsonMatch[0]);
+                        if (errorJson.error && errorJson.error.innererror && errorJson.error.innererror.message) {
+                            summary = errorJson.error.innererror.message;
+                            details = errorJson.error.message || summary;
+                            code = errorJson.error.code || '';
+                        }
+                        else if (errorJson.error && errorJson.error.message) {
+                            summary = errorJson.error.message;
+                            details = errorJson.error.message;
+                            code = errorJson.error.code || '';
+                        }
+                    }
+                    catch {
+                        // JSON parsing failed, use message as is
+                        summary = message;
+                        details = message;
+                    }
+                }
+                else {
+                    // Look for common Kusto error patterns
+                    if (message.includes('Failed to resolve')) {
+                        summary = message;
+                        category = 'Semantic Error';
+                        severity = 'Error';
+                    }
+                    else if (message.includes('Syntax error')) {
+                        summary = message;
+                        category = 'Syntax Error';
+                        severity = 'Error';
+                    }
+                    else if (message.includes('operator:')) {
+                        summary = message;
+                        category = 'Operator Error';
+                        severity = 'Error';
+                    }
+                    else {
+                        summary = message;
+                    }
+                    details = message;
+                }
+            }
+            // Handle status code errors
+            else if (error?.status || error?.statusCode) {
+                const status = error.status || error.statusCode;
+                switch (status) {
+                    case 400:
+                        summary = 'Bad Request - Query syntax or semantic error';
+                        category = 'Query Error';
+                        break;
+                    case 401:
+                        summary = 'Unauthorized - Authentication failed';
+                        category = 'Authentication Error';
+                        break;
+                    case 403:
+                        summary = 'Forbidden - Insufficient permissions';
+                        category = 'Authorization Error';
+                        break;
+                    case 429:
+                        summary = 'Too Many Requests - Rate limit exceeded';
+                        category = 'Rate Limit Error';
+                        break;
+                    case 500:
+                        summary = 'Internal Server Error - Cluster issue';
+                        category = 'Server Error';
+                        break;
+                    default:
+                        summary = `HTTP ${status} error occurred`;
+                        category = 'HTTP Error';
+                }
+                details = `HTTP Status: ${status}`;
+                code = status.toString();
+            }
+        }
+        catch (parseError) {
+            // Fallback error handling
+            summary = error instanceof Error ? error.message : 'Unknown error occurred';
+            details = error instanceof Error ? error.stack || error.message : String(error);
+        }
+        return {
+            summary,
+            details,
+            code,
+            severity,
+            category,
+            oneApiErrors,
+            rawError: error
+        };
     }
     function processKustoResponse(response, executionTimeMs) {
         try {
@@ -456,11 +604,11 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         });
         panel.webview.html = getResultsWebviewContent(query, results, connection);
     }
-    function showQueryError(query, errorMessage, connection) {
+    function showQueryError(query, errorDetails, connection) {
         const panel = vscode.window.createWebviewPanel('kustoError', 'Kusto Query Error', vscode.ViewColumn.Two, {
             enableScripts: true
         });
-        panel.webview.html = getErrorWebviewContent(query, errorMessage, connection);
+        panel.webview.html = getErrorWebviewContent(query, errorDetails, connection);
     }
     function getResultsWebviewContent(query, results, connection) {
         const tableRows = results.rows.map((row) => `<tr>${row.map((cell) => `<td title="${cell}">${cell}</td>`).join('')}</tr>`).join('');
@@ -592,7 +740,30 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         </body>
         </html>`;
     }
-    function getErrorWebviewContent(query, errorMessage, connection) {
+    function getErrorWebviewContent(query, errorDetails, connection) {
+        // Handle both old string format and new detailed format for backward compatibility
+        const details = typeof errorDetails === 'string'
+            ? { summary: errorDetails, details: errorDetails, category: 'Error', severity: 'Error' }
+            : errorDetails;
+        const additionalErrorInfo = details.oneApiErrors && details.oneApiErrors.length > 0
+            ? details.oneApiErrors.map((error, index) => `
+                <div style="margin-top: 10px; padding: 10px; background: var(--vscode-textCodeBlock-background); border-radius: 4px;">
+                    <strong>Error ${index + 1}:</strong><br>
+                    <div style="margin-top: 5px; font-family: monospace; font-size: 12px;">${error.message || 'Unknown error'}</div>
+                    ${error.code ? `<div style="margin-top: 5px; color: var(--vscode-descriptionForeground); font-size: 11px;">Code: ${error.code}</div>` : ''}
+                </div>
+            `).join('')
+            : '';
+        const errorCodeInfo = details.code
+            ? `<div style="margin-top: 10px; color: var(--vscode-descriptionForeground); font-size: 12px;">
+                <strong>Error Code:</strong> ${details.code}
+               </div>`
+            : '';
+        const errorCategoryInfo = details.category && details.category !== 'General'
+            ? `<div style="margin-top: 5px; color: var(--vscode-descriptionForeground); font-size: 12px;">
+                <strong>Category:</strong> ${details.category}
+               </div>`
+            : '';
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
@@ -605,6 +776,7 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     background-color: var(--vscode-editor-background);
                     color: var(--vscode-editor-foreground);
                     margin: 20px;
+                    line-height: 1.6;
                 }
                 .connection-info {
                     background-color: var(--vscode-badge-background);
@@ -616,7 +788,7 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 }
                 .query-info {
                     background-color: var(--vscode-textCodeBlock-background);
-                    padding: 10px;
+                    padding: 15px;
                     border-radius: 4px;
                     margin-bottom: 15px;
                     border-left: 3px solid var(--vscode-charts-blue);
@@ -629,29 +801,91 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     margin-bottom: 15px;
                     border-left: 3px solid var(--vscode-charts-red);
                 }
-                .query-text, .error-text {
+                .error-summary {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: var(--vscode-charts-red);
+                    margin-bottom: 10px;
+                }
+                .error-details {
+                    background-color: rgba(255, 0, 0, 0.1);
+                    padding: 10px;
+                    border-radius: 4px;
+                    margin-top: 10px;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: 13px;
+                    border: 1px solid rgba(255, 0, 0, 0.3);
+                }
+                .query-text {
                     font-family: var(--vscode-editor-font-family);
                     font-size: 13px;
                     white-space: pre-wrap;
                     line-height: 1.4;
+                    background-color: var(--vscode-editor-background);
+                    padding: 10px;
+                    border-radius: 4px;
+                    border: 1px solid var(--vscode-widget-border);
+                    margin-top: 8px;
                 }
-                .error {
-                    color: var(--vscode-charts-red);
+                .help-section {
+                    background-color: var(--vscode-textCodeBlock-background);
+                    padding: 15px;
+                    border-radius: 4px;
+                    margin-top: 20px;
+                    border-left: 3px solid var(--vscode-charts-orange);
+                }
+                .help-title {
+                    color: var(--vscode-charts-orange);
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }
+                .severity-${details.severity?.toLowerCase() || 'error'} {
+                    color: ${details.severity === 'Warning' ? 'var(--vscode-charts-orange)' : 'var(--vscode-charts-red)'};
                 }
             </style>
         </head>
         <body>
             <h2>❌ Kusto Query Error</h2>
+            
             <div class="connection-info">
                 🔗 Connected to: <strong>${connection.cluster}</strong> / <strong>${connection.database}</strong>
             </div>
+            
             <div class="query-info">
-                <strong>📝 Failed Query:</strong><br>
+                <strong>📝 Failed Query:</strong>
                 <div class="query-text">${query}</div>
             </div>
+            
             <div class="error-info">
-                <strong>❌ Error Details:</strong><br>
-                <div class="error-text">${errorMessage}</div>
+                <div class="error-summary severity-${details.severity?.toLowerCase() || 'error'}">
+                    ${details.summary}
+                </div>
+                ${errorCategoryInfo}
+                ${errorCodeInfo}
+                
+                <div class="error-details">
+                    <strong>Details:</strong><br>
+                    ${details.details}
+                </div>
+                
+                ${additionalErrorInfo}
+            </div>
+
+            <div class="help-section">
+                <div class="help-title">💡 Troubleshooting Tips</div>
+                <ul>
+                    <li><strong>Column/Property Errors:</strong> Check if all referenced columns exist in the source table(s)</li>
+                    <li><strong>Syntax Errors:</strong> Verify KQL syntax, operators, and function calls</li>
+                    <li><strong>Table Errors:</strong> Ensure table names are correct and accessible</li>
+                    <li><strong>Function Errors:</strong> Check function parameters and data types</li>
+                    <li><strong>Authentication Errors:</strong> Verify your connection and permissions</li>
+                </ul>
+                <p style="margin-top: 15px; font-size: 12px; color: var(--vscode-descriptionForeground);">
+                    💡 <strong>Tip:</strong> Use Ctrl+Space for IntelliSense suggestions and check the 
+                    <a href="https://docs.microsoft.com/en-us/azure/data-explorer/kusto/query/" style="color: var(--vscode-textLink-foreground);">
+                    KQL documentation
+                    </a> for syntax reference.
+                </p>
             </div>
         </body>
         </html>`;

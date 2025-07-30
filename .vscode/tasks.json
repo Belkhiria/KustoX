@@ -5,6 +5,7 @@
             "type": "npm",
             "script": "compile",
             "group": "build",
+            "label": "npm: compile",
             "presentation": {
                 "echo": true,
                 "reveal": "silent",
@@ -19,6 +20,7 @@
             "type": "npm",
             "script": "watch",
             "group": "build",
+            "label": "npm: watch",
             "isBackground": true,
             "presentation": {
                 "echo": true,

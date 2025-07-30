@@ -11,10 +11,7 @@
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
             ],
-            "preLaunchTask": {
-                "type": "npm",
-                "script": "compile"
-            }
+            "preLaunchTask": "npm: compile"
         },
         {
             "name": "Run Extension (New Version)",
@@ -27,10 +24,7 @@
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
             ],
-            "preLaunchTask": {
-                "type": "npm",
-                "script": "compile"
-            },
+            "preLaunchTask": "npm: compile",
             "sourceMaps": true,
             "env": {
                 "NODE_ENV": "development"
@@ -47,10 +41,7 @@
             "outFiles": [
                 "${workspaceFolder}/out/test/**/*.js"
             ],
-            "preLaunchTask": {
-                "type": "npm",
-                "script": "compile"
-            }
+            "preLaunchTask": "npm: compile"
         }
     ]
 }

@@ -32,7 +32,28 @@
         "extensions": [
           ".kql",
           ".kusto"
-        ]
+        ],
+        "configuration": "./syntaxes/kusto-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kusto",
+        "scopeName": "source.kusto",
+        "path": "./syntaxes/kusto.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "KustoX Dark Theme",
+        "uiTheme": "vs-dark",
+        "path": "./themes/kustox-dark-theme.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "kusto",
+        "path": "./snippets/kusto-snippets.json"
       }
     ],
     "commands": [
