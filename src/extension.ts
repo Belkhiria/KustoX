@@ -45,10 +45,11 @@ interface KustoConnection {
 
 // Connection Tree Interfaces
 interface ConnectionItem {
-    type: 'cluster' | 'database';
+    type: 'cluster' | 'database' | 'table';
     name: string;
     cluster?: string;
     database?: string;
+    table?: string;
     children?: ConnectionItem[];
 }
 
@@ -72,6 +73,14 @@ class ConnectionTreeItem extends vscode.TreeItem {
                 title: 'Connect to Database',
                 arguments: [this]
             };
+        } else if (item.type === 'table') {
+            this.iconPath = new vscode.ThemeIcon('table');
+            this.tooltip = `Table: ${item.name}`;
+            this.command = {
+                command: 'kustox.insertTableName',
+                title: 'Insert Table Name',
+                arguments: [this]
+            };
         }
     }
 }
@@ -82,9 +91,11 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
 
     private connections: ConnectionItem[] = [];
     private clusterClients: Map<string, any> = new Map(); // Store authenticated clients
+    private tableCache: Map<string, ConnectionItem[]> = new Map(); // Cache tables per database
 
     constructor(private context: vscode.ExtensionContext) {
         this.loadConnections();
+        this.loadTableCache();
     }
 
     refresh(): void {
@@ -96,8 +107,12 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
     }
 
     getChildren(element?: ConnectionTreeItem): Thenable<ConnectionTreeItem[]> {
+        console.log('getChildren called with element:', element?.item);
+        
         if (!element) {
             // Root level - return clusters or welcome message
+            console.log('Getting root level items, connections count:', this.connections.length);
+            
             if (this.connections.length === 0) {
                 // Return a welcome item when no clusters are configured
                 const welcomeItem: ConnectionItem = {
@@ -115,23 +130,154 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
                 new ConnectionTreeItem(item, item.children ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None)
             ));
         } else {
-            // Return children (databases for clusters)
-            const children = element.item.children || [];
-            return Promise.resolve(children.map(child => 
-                new ConnectionTreeItem(child, vscode.TreeItemCollapsibleState.None)
-            ));
+            // Handle different types of children
+            console.log('Getting children for item type:', element.item.type);
+            
+            if (element.item.type === 'cluster') {
+                // Return databases for clusters
+                const children = element.item.children || [];
+                console.log('Cluster children (databases):', children.length);
+                return Promise.resolve(children.map(child => 
+                    new ConnectionTreeItem(child, vscode.TreeItemCollapsibleState.Collapsed) // Always make databases expandable
+                ));
+            } else if (element.item.type === 'database') {
+                // Return tables for databases (discover them dynamically)
+                console.log('Database expanded, discovering tables...');
+                
+                if (element.item.cluster && element.item.database) {
+                    console.log('Database details - cluster:', element.item.cluster, 'database:', element.item.database);
+                    
+                    // Check if we have a client for this cluster
+                    // Check cache first
+                    const cacheKey = `${element.item.cluster}:${element.item.database}`;
+                    const cachedTables = this.tableCache.get(cacheKey);
+                    
+                    if (cachedTables && cachedTables.length > 0) {
+                        console.log('Using cached tables for', element.item.database, '- found', cachedTables.length, 'tables');
+                        return Promise.resolve(cachedTables.map(table => 
+                            new ConnectionTreeItem(table, vscode.TreeItemCollapsibleState.None)
+                        ));
+                    }
+                    
+                    console.log('No cached tables found, discovering from server...');
+                    
+                    const hasClient = this.clusterClients.has(element.item.cluster);
+                    console.log('Has client for cluster:', hasClient);
+                    
+                    if (!hasClient) {
+                        console.log('No client available, attempting to authenticate and connect...');
+                        
+                        // Show progress while connecting for table discovery
+                        return vscode.window.withProgress({
+                            location: vscode.ProgressLocation.Notification,
+                            title: "Connecting for table discovery...",
+                            cancellable: false
+                        }, async (progress) => {
+                            progress.report({ increment: 0, message: "Loading Kusto SDK..." });
+                            
+                            try {
+                                await loadKustoSDK();
+                                
+                                progress.report({ increment: 30, message: "Authenticating..." });
+                                
+                                const kcsb = KustoConnectionStringBuilder.withUserPrompt(element.item.cluster!);
+                                const client = new KustoClient(kcsb);
+                                
+                                progress.report({ increment: 60, message: "Testing connection..." });
+                                
+                                // Test the connection first to trigger authentication
+                                await client.execute(element.item.database!, 'print "Table discovery auth test"');
+                                
+                                progress.report({ increment: 80, message: "Discovering tables..." });
+                                
+                                // Store the authenticated client
+                                this.clusterClients.set(element.item.cluster!, client);
+                                console.log('Client created and authenticated for table discovery');
+                                
+                                const tables = await this.discoverTables(element.item.cluster!, element.item.database!);
+                                
+                                progress.report({ increment: 100, message: "Tables loaded!" });
+                                
+                                console.log('Tables discovered after authentication:', tables.length);
+                                return tables.map(table => 
+                                    new ConnectionTreeItem(table, vscode.TreeItemCollapsibleState.None)
+                                );
+                            } catch (error) {
+                                console.error('Failed to authenticate or discover tables:', error);
+                                vscode.window.showErrorMessage(`Failed to connect for table discovery: ${error}`);
+                                return [];
+                            }
+                        });
+                    }
+                    
+                    return this.discoverTables(element.item.cluster, element.item.database)
+                        .then(tables => {
+                            console.log('Tables discovered:', tables.length);
+                            return tables.map(table => 
+                                new ConnectionTreeItem(table, vscode.TreeItemCollapsibleState.None)
+                            );
+                        })
+                        .catch(error => {
+                            console.error('Error loading tables for database:', element.item.database, error);
+                            return [];
+                        });
+                }
+                console.log('Database missing cluster or database info');
+                return Promise.resolve([]);
+            } else {
+                // For tables or other types, no children
+                console.log('No children for item type:', element.item.type);
+                return Promise.resolve([]);
+            }
         }
     }
 
     async addCluster(clusterUrl: string): Promise<void> {
         try {
-            // Validate cluster URL
-            if (!clusterUrl.startsWith('https://')) {
-                clusterUrl = 'https://' + clusterUrl;
+            // Enhanced URL validation for different Kusto cluster formats
+            let validatedUrl = clusterUrl.trim();
+            
+            // Add https:// if not present
+            if (!validatedUrl.startsWith('https://')) {
+                validatedUrl = 'https://' + validatedUrl;
             }
+            
+            // Validate that it looks like a Kusto cluster URL
+            const kustoUrlPattern = /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]*\.(kusto|kustomfa|help\.kusto)\.windows\.net$/;
+            
+            if (!kustoUrlPattern.test(validatedUrl)) {
+                // Check if it might be a custom domain or internal cluster
+                const customDomainPattern = /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]+(:\d+)?$/;
+                
+                if (!customDomainPattern.test(validatedUrl)) {
+                    vscode.window.showErrorMessage(
+                        `Invalid Kusto cluster URL: "${clusterUrl}"\n\n` +
+                        `Expected formats:\n` +
+                        `• https://clustername.kusto.windows.net\n` +
+                        `• https://clustername.kustomfa.windows.net\n` +
+                        `• https://help.kusto.windows.net\n` +
+                        `• https://your-custom-domain.com\n\n` +
+                        `Your URL: "${validatedUrl}"`
+                    );
+                    return;
+                }
+                
+                // For custom domains, show a warning but proceed
+                const proceed = await vscode.window.showWarningMessage(
+                    `Custom cluster domain detected: ${validatedUrl}\n\nThis doesn't match standard Kusto URL patterns. Do you want to proceed?`,
+                    'Yes, proceed',
+                    'Cancel'
+                );
+                
+                if (proceed !== 'Yes, proceed') {
+                    return;
+                }
+            }
+            
+            console.log('Using validated cluster URL:', validatedUrl);
 
             // Check if cluster already exists
-            if (this.connections.find(c => c.name === clusterUrl)) {
+            if (this.connections.find(c => c.name === validatedUrl)) {
                 vscode.window.showWarningMessage('Cluster already exists in the list.');
                 return;
             }
@@ -149,11 +295,11 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
                 progress.report({ increment: 25, message: "Creating connection..." });
                 
                 // Use interactive authentication (more user-friendly than device code)
-                const kcsb = KustoConnectionStringBuilder.withUserPrompt(clusterUrl);
+                const kcsb = KustoConnectionStringBuilder.withUserPrompt(validatedUrl);
                 const client = new KustoClient(kcsb);
 
                 // Store the authenticated client for reuse
-                this.clusterClients.set(clusterUrl, client);
+                this.clusterClients.set(validatedUrl, client);
 
                 progress.report({ increment: 50, message: "Connecting to cluster..." });
 
@@ -181,7 +327,7 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
                             databases.push({
                                 type: 'database',
                                 name: dbName,
-                                cluster: clusterUrl,
+                                cluster: validatedUrl,
                                 database: dbName
                             });
                         }
@@ -197,8 +343,8 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
                 // Add cluster with databases
                 const clusterItem: ConnectionItem = {
                     type: 'cluster',
-                    name: clusterUrl,
-                    cluster: clusterUrl,
+                    name: validatedUrl,
+                    cluster: validatedUrl,
                     children: databases
                 };
 
@@ -232,17 +378,68 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
     async connectToDatabase(item: ConnectionTreeItem): Promise<void> {
         if (item.item.type === 'database' && item.item.cluster && item.item.database) {
             try {
+                console.log('Connecting to database:', item.item.database, 'on cluster:', item.item.cluster);
+                
                 // Try to reuse the existing authenticated client
                 let client = this.clusterClients.get(item.item.cluster);
                 
                 if (!client) {
-                    // If no client exists, create a new one
-                    await loadKustoSDK();
-                    const kcsb = KustoConnectionStringBuilder.withUserPrompt(item.item.cluster);
-                    client = new KustoClient(kcsb);
-                    this.clusterClients.set(item.item.cluster, client);
+                    console.log('No existing client found, creating new connection...');
+                    
+                    // Show progress while authenticating
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Authenticating to Kusto cluster...",
+                        cancellable: false
+                    }, async (progress) => {
+                        progress.report({ increment: 0, message: "Loading Kusto SDK..." });
+                        
+                        // Load SDK first
+                        await loadKustoSDK();
+                        
+                        progress.report({ increment: 30, message: "Creating connection..." });
+                        
+                        // Create connection with user prompt
+                        const kcsb = KustoConnectionStringBuilder.withUserPrompt(item.item.cluster);
+                        client = new KustoClient(kcsb);
+                        
+                        progress.report({ increment: 60, message: "Testing authentication..." });
+                        
+                        // Test the connection immediately to trigger authentication
+                        try {
+                            await client.execute(item.item.database, 'print "Authentication test"');
+                            console.log('Authentication successful');
+                            
+                            // Only store the client if authentication succeeds
+                            this.clusterClients.set(item.item.cluster!, client);
+                            console.log('Client authenticated and stored successfully');
+                            
+                            progress.report({ increment: 100, message: "Connected!" });
+                        } catch (authError) {
+                            console.error('Authentication failed during connection test:', authError);
+                            throw new Error(`Authentication failed: ${authError}`);
+                        }
+                    });
+                } else {
+                    console.log('Reusing existing authenticated client');
+                    
+                    // Test the existing client to make sure it's still valid
+                    try {
+                        console.log('Testing existing client connection...');
+                        await client.execute(item.item.database, 'print "Connection test"');
+                        console.log('Existing client is still valid');
+                    } catch (testError) {
+                        console.warn('Existing client failed, re-authenticating...', testError);
+                        
+                        // Remove the failed client and try again
+                        this.clusterClients.delete(item.item.cluster);
+                        
+                        // Recursive call to create a new client
+                        return this.connectToDatabase(item);
+                    }
                 }
 
+                // Set the global connection for query execution
                 kustoConnection = {
                     client: client,
                     cluster: item.item.cluster,
@@ -250,10 +447,81 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
                 };
 
                 vscode.window.showInformationMessage(`Connected to ${item.item.database} on ${item.item.cluster}`);
+                
+                // Trigger a refresh of the tree to show tables
+                console.log('Refreshing tree to show tables...');
+                this.refresh();
+                
             } catch (error) {
                 console.error('Error connecting to database:', error);
                 vscode.window.showErrorMessage(`Failed to connect to database: ${error}`);
+                
+                // Remove the failed client
+                this.clusterClients.delete(item.item.cluster);
             }
+        }
+    }
+
+    async discoverTables(clusterUrl: string, database: string): Promise<ConnectionItem[]> {
+        try {
+            console.log('Discovering tables for database:', database, 'on cluster:', clusterUrl);
+            
+            const client = this.clusterClients.get(clusterUrl);
+            if (!client) {
+                console.warn('No client found for cluster:', clusterUrl);
+                return [];
+            }
+
+            console.log('Client found, executing .show tables query...');
+            
+            // Query to get tables in the database
+            const query = '.show tables';
+            const results = await client.execute(database, query);
+            
+            console.log('Tables query results:', results);
+            console.log('Primary results available:', !!results?.primaryResults);
+            console.log('Primary results length:', results?.primaryResults?.length);
+            
+            const tables: ConnectionItem[] = [];
+            if (results && results.primaryResults && results.primaryResults.length > 0) {
+                const table = results.primaryResults[0];
+                console.log('Processing table rows...');
+                
+                let rowCount = 0;
+                for (const row of table.rows()) {
+                    rowCount++;
+                    console.log('Row', rowCount, ':', row);
+                    
+                    const tableName = row.TableName || row[0]; // Handle different response formats
+                    console.log('Extracted table name:', tableName);
+                    
+                    if (tableName) {
+                        tables.push({
+                            type: 'table',
+                            name: tableName,
+                            cluster: clusterUrl,
+                            database: database,
+                            table: tableName
+                        });
+                    }
+                }
+                
+                console.log('Total rows processed:', rowCount);
+                console.log('Total tables discovered:', tables.length);
+            }
+
+            console.log('Returning tables:', tables.map(t => t.name));
+            
+            // Cache the discovered tables
+            const cacheKey = `${clusterUrl}:${database}`;
+            this.tableCache.set(cacheKey, tables);
+            this.saveTableCache();
+            console.log('Tables cached for', cacheKey);
+            
+            return tables;
+        } catch (error) {
+            console.error('Error discovering tables for database:', database, error);
+            return [];
         }
     }
 
@@ -264,6 +532,8 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
             connectionString = item.item.name;
         } else if (item.item.type === 'database') {
             connectionString = `${item.item.cluster}/${item.item.database}`;
+        } else if (item.item.type === 'table') {
+            connectionString = `${item.item.cluster}/${item.item.database}/${item.item.table}`;
         }
 
         vscode.env.clipboard.writeText(connectionString);
@@ -277,6 +547,25 @@ class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeIt
 
     private saveConnections(): void {
         this.context.globalState.update('kustoxConnections', this.connections);
+    }
+
+    private loadTableCache(): void {
+        const saved = this.context.globalState.get<Record<string, ConnectionItem[]>>('kustoxTableCache', {});
+        this.tableCache = new Map(Object.entries(saved));
+        console.log('Loaded table cache with', this.tableCache.size, 'entries');
+    }
+
+    private saveTableCache(): void {
+        const cacheObject = Object.fromEntries(this.tableCache);
+        this.context.globalState.update('kustoxTableCache', cacheObject);
+        console.log('Saved table cache with', this.tableCache.size, 'entries');
+    }
+
+    refreshTableCache(clusterUrl: string, database: string): void {
+        const cacheKey = `${clusterUrl}:${database}`;
+        this.tableCache.delete(cacheKey);
+        console.log('Cleared table cache for', cacheKey);
+        this.refresh(); // Refresh the tree to reload tables
     }
 }
 
@@ -1648,10 +1937,22 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 if (!value) {
                     return 'Cluster URL is required';
                 }
-                if (!value.includes('.kusto.windows.net') && !value.includes('localhost') && !value.includes('127.0.0.1')) {
-                    return 'Please enter a valid Kusto cluster URL';
+                
+                // Add https:// if not present for validation
+                let testUrl = value.trim();
+                if (!testUrl.startsWith('https://')) {
+                    testUrl = 'https://' + testUrl;
                 }
-                return null;
+                
+                // Enhanced validation for multiple Kusto cluster formats
+                const kustoUrlPattern = /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]*\.(kusto|kustomfa|help\.kusto)\.windows\.net$/;
+                const customDomainPattern = /^https:\/\/[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]+(:\d+)?$/;
+                
+                if (kustoUrlPattern.test(testUrl) || customDomainPattern.test(testUrl)) {
+                    return null; // Valid
+                }
+                
+                return 'Please enter a valid Kusto cluster URL (e.g., https://cluster.kusto.windows.net or https://cluster.kustomfa.windows.net)';
             }
         });
 
@@ -1684,6 +1985,28 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         connectionProvider.copyConnectionString(item);
     });
 
+    const insertTableNameCommand = vscode.commands.registerCommand('kustox.insertTableName', (item: ConnectionTreeItem) => {
+        if (item.item.type === 'table' && item.item.name) {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document.languageId === 'kusto') {
+                const position = editor.selection.active;
+                editor.edit(editBuilder => {
+                    editBuilder.insert(position, item.item.name);
+                });
+                vscode.window.showInformationMessage(`Inserted table name: ${item.item.name}`);
+            } else {
+                vscode.window.showWarningMessage('Please open a Kusto (.kql) file to insert table names.');
+            }
+        }
+    });
+
+    const refreshTablesCommand = vscode.commands.registerCommand('kustox.refreshTables', (item: ConnectionTreeItem) => {
+        if (item.item.type === 'database' && item.item.cluster && item.item.database) {
+            connectionProvider.refreshTableCache(item.item.cluster, item.item.database);
+            vscode.window.showInformationMessage(`Table cache refreshed for ${item.item.database}`);
+        }
+    });
+
     context.subscriptions.push(
         openExplorer, 
         helloWorld, 
@@ -1695,7 +2018,9 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         refreshConnectionsCommand,
         connectToDatabaseCommand,
         removeClusterCommand,
-        copyConnectionStringCommand
+        copyConnectionStringCommand,
+        insertTableNameCommand,
+        refreshTablesCommand
     );
 
     // Register integration tests

@@ -131,6 +131,18 @@
         "title": "Copy Connection String",
         "category": "KustoX",
         "icon": "$(clippy)"
+      },
+      {
+        "command": "kustox.insertTableName",
+        "title": "Insert Table Name",
+        "category": "KustoX",
+        "icon": "$(symbol-field)"
+      },
+      {
+        "command": "kustox.refreshTables",
+        "title": "Refresh Tables",
+        "category": "KustoX",
+        "icon": "$(refresh)"
       }
     ],
     "views": {
@@ -183,7 +195,17 @@
         },
         {
           "command": "kustox.copyConnectionString",
-          "when": "view == kustoxConnections && (viewItem == cluster || viewItem == database)",
+          "when": "view == kustoxConnections && (viewItem == cluster || viewItem == database || viewItem == table)",
+          "group": "context"
+        },
+        {
+          "command": "kustox.insertTableName",
+          "when": "view == kustoxConnections && viewItem == table",
+          "group": "inline"
+        },
+        {
+          "command": "kustox.refreshTables",
+          "when": "view == kustoxConnections && viewItem == database",
           "group": "context"
         }
       ]
