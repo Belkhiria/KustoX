@@ -43,10 +43,251 @@ interface KustoConnection {
     database: string;
 }
 
+// Connection Tree Interfaces
+interface ConnectionItem {
+    type: 'cluster' | 'database';
+    name: string;
+    cluster?: string;
+    database?: string;
+    children?: ConnectionItem[];
+}
+
+class ConnectionTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly item: ConnectionItem,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState
+    ) {
+        super(item.name, collapsibleState);
+        
+        this.contextValue = item.type;
+        
+        if (item.type === 'cluster') {
+            this.iconPath = new vscode.ThemeIcon('server-environment');
+            this.tooltip = `Cluster: ${item.name}`;
+        } else if (item.type === 'database') {
+            this.iconPath = new vscode.ThemeIcon('database');
+            this.tooltip = `Database: ${item.name}`;
+            this.command = {
+                command: 'kustox.connectToDatabase',
+                title: 'Connect to Database',
+                arguments: [this]
+            };
+        }
+    }
+}
+
+class ConnectionTreeProvider implements vscode.TreeDataProvider<ConnectionTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<ConnectionTreeItem | undefined | null | void> = new vscode.EventEmitter<ConnectionTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<ConnectionTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private connections: ConnectionItem[] = [];
+    private clusterClients: Map<string, any> = new Map(); // Store authenticated clients
+
+    constructor(private context: vscode.ExtensionContext) {
+        this.loadConnections();
+    }
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: ConnectionTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: ConnectionTreeItem): Thenable<ConnectionTreeItem[]> {
+        if (!element) {
+            // Root level - return clusters or welcome message
+            if (this.connections.length === 0) {
+                // Return a welcome item when no clusters are configured
+                const welcomeItem: ConnectionItem = {
+                    type: 'cluster',
+                    name: 'Click + to add your first cluster'
+                };
+                const treeItem = new ConnectionTreeItem(welcomeItem, vscode.TreeItemCollapsibleState.None);
+                treeItem.contextValue = 'welcome';
+                treeItem.iconPath = new vscode.ThemeIcon('info');
+                treeItem.tooltip = 'Add a Kusto cluster to get started';
+                return Promise.resolve([treeItem]);
+            }
+            
+            return Promise.resolve(this.connections.map(item => 
+                new ConnectionTreeItem(item, item.children ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None)
+            ));
+        } else {
+            // Return children (databases for clusters)
+            const children = element.item.children || [];
+            return Promise.resolve(children.map(child => 
+                new ConnectionTreeItem(child, vscode.TreeItemCollapsibleState.None)
+            ));
+        }
+    }
+
+    async addCluster(clusterUrl: string): Promise<void> {
+        try {
+            // Validate cluster URL
+            if (!clusterUrl.startsWith('https://')) {
+                clusterUrl = 'https://' + clusterUrl;
+            }
+
+            // Check if cluster already exists
+            if (this.connections.find(c => c.name === clusterUrl)) {
+                vscode.window.showWarningMessage('Cluster already exists in the list.');
+                return;
+            }
+
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Adding Kusto cluster...",
+                cancellable: true
+            }, async (progress, token) => {
+                progress.report({ increment: 0, message: "Loading Kusto SDK..." });
+
+                // Try to connect and get databases
+                await loadKustoSDK();
+                
+                progress.report({ increment: 25, message: "Creating connection..." });
+                
+                // Use interactive authentication (more user-friendly than device code)
+                const kcsb = KustoConnectionStringBuilder.withUserPrompt(clusterUrl);
+                const client = new KustoClient(kcsb);
+
+                // Store the authenticated client for reuse
+                this.clusterClients.set(clusterUrl, client);
+
+                progress.report({ increment: 50, message: "Connecting to cluster..." });
+
+                if (token.isCancellationRequested) {
+                    return;
+                }
+
+                // Query to get databases with timeout
+                const query = '.show databases';
+                progress.report({ increment: 75, message: "Discovering databases..." });
+                
+                const results = await Promise.race([
+                    client.execute('', query),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+                    )
+                ]);
+                
+                const databases: ConnectionItem[] = [];
+                if (results && results.primaryResults && results.primaryResults.length > 0) {
+                    const table = results.primaryResults[0];
+                    for (const row of table.rows()) {
+                        const dbName = row.DatabaseName || row[0]; // Handle different response formats
+                        if (dbName) {
+                            databases.push({
+                                type: 'database',
+                                name: dbName,
+                                cluster: clusterUrl,
+                                database: dbName
+                            });
+                        }
+                    }
+                }
+
+                if (token.isCancellationRequested) {
+                    return;
+                }
+
+                progress.report({ increment: 100, message: "Adding to tree..." });
+
+                // Add cluster with databases
+                const clusterItem: ConnectionItem = {
+                    type: 'cluster',
+                    name: clusterUrl,
+                    cluster: clusterUrl,
+                    children: databases
+                };
+
+                this.connections.push(clusterItem);
+                this.saveConnections();
+                this.refresh();
+
+                vscode.window.showInformationMessage(`Successfully added cluster with ${databases.length} databases.`);
+            });
+
+        } catch (error) {
+            console.error('Error adding cluster:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to add cluster: ${errorMessage}`);
+        }
+    }
+
+    removeCluster(item: ConnectionTreeItem): void {
+        const index = this.connections.findIndex(c => c.name === item.item.name);
+        if (index !== -1) {
+            // Remove the stored client
+            this.clusterClients.delete(item.item.name);
+            
+            this.connections.splice(index, 1);
+            this.saveConnections();
+            this.refresh();
+            vscode.window.showInformationMessage(`Removed cluster: ${item.item.name}`);
+        }
+    }
+
+    async connectToDatabase(item: ConnectionTreeItem): Promise<void> {
+        if (item.item.type === 'database' && item.item.cluster && item.item.database) {
+            try {
+                // Try to reuse the existing authenticated client
+                let client = this.clusterClients.get(item.item.cluster);
+                
+                if (!client) {
+                    // If no client exists, create a new one
+                    await loadKustoSDK();
+                    const kcsb = KustoConnectionStringBuilder.withUserPrompt(item.item.cluster);
+                    client = new KustoClient(kcsb);
+                    this.clusterClients.set(item.item.cluster, client);
+                }
+
+                kustoConnection = {
+                    client: client,
+                    cluster: item.item.cluster,
+                    database: item.item.database
+                };
+
+                vscode.window.showInformationMessage(`Connected to ${item.item.database} on ${item.item.cluster}`);
+            } catch (error) {
+                console.error('Error connecting to database:', error);
+                vscode.window.showErrorMessage(`Failed to connect to database: ${error}`);
+            }
+        }
+    }
+
+    copyConnectionString(item: ConnectionTreeItem): void {
+        let connectionString = '';
+        
+        if (item.item.type === 'cluster') {
+            connectionString = item.item.name;
+        } else if (item.item.type === 'database') {
+            connectionString = `${item.item.cluster}/${item.item.database}`;
+        }
+
+        vscode.env.clipboard.writeText(connectionString);
+        vscode.window.showInformationMessage('Connection string copied to clipboard.');
+    }
+
+    private loadConnections(): void {
+        const saved = this.context.globalState.get<ConnectionItem[]>('kustoxConnections', []);
+        this.connections = saved;
+    }
+
+    private saveConnections(): void {
+        this.context.globalState.update('kustoxConnections', this.connections);
+    }
+}
+
 let kustoConnection: KustoConnection | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('KustoX extension is now active!');
+
+    // Create the connection tree provider first so it can be used by other functions
+    const connectionProvider = new ConnectionTreeProvider(context);
+    vscode.window.registerTreeDataProvider('kustoxConnections', connectionProvider);
 
     // Register commands
     const openExplorer = vscode.commands.registerCommand('kustox.openExplorer', () => {
@@ -307,6 +548,14 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     database
                 };
 
+                // Also add the cluster to the connection tree for future use
+                try {
+                    await connectionProvider.addCluster(clusterUrl);
+                } catch (treeError) {
+                    // If adding to tree fails, don't fail the whole connection
+                    console.warn('Failed to add cluster to tree view:', treeError);
+                }
+
                 vscode.window.showInformationMessage(`✅ Successfully connected to ${clusterUrl}/${database}`);
             });
 
@@ -345,6 +594,13 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             }
         }
 
+        // Validate connection details
+        console.log('Kusto connection details:', {
+            cluster: kustoConnection.cluster,
+            database: kustoConnection.database,
+            hasClient: !!kustoConnection.client
+        });
+
         // Get the query text (selected text or entire document)
         const query = editor.selection.isEmpty 
             ? editor.document.getText() 
@@ -372,6 +628,8 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             return;
         }
 
+        console.log('Executing query:', cleanQuery);
+
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
@@ -396,6 +654,23 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 crp.setOption('version', '0.1.0');
                 
                 progress.report({ increment: 30, message: "Sending query to cluster..." });
+
+                // First, test the connection with a simple query if this is the first query
+                if (cleanQuery.includes('print') || cleanQuery.includes('StormEvents') || cleanQuery.includes('.show')) {
+                    console.log('Executing user query directly...');
+                } else {
+                    console.log('Testing connection first...');
+                    try {
+                        const testResponse = await kustoConnection!.client.execute(
+                            kustoConnection!.database, 
+                            'print "Connection test"'
+                        );
+                        console.log('Connection test successful:', !!testResponse);
+                    } catch (testError) {
+                        console.error('Connection test failed:', testError);
+                        throw new Error('Connection test failed. Please reconnect to the database.');
+                    }
+                }
 
                 // Execute query with client request properties
                 const response = await kustoConnection!.client.execute(
@@ -1364,7 +1639,64 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         </html>`;
     }
 
-    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnection, executeQuery, disconnectKusto);
+    // Register tree view commands
+    const addClusterCommand = vscode.commands.registerCommand('kustox.addCluster', async () => {
+        const clusterUrl = await vscode.window.showInputBox({
+            prompt: 'Enter Kusto cluster URL',
+            placeHolder: 'https://your-cluster.kusto.windows.net',
+            validateInput: (value) => {
+                if (!value) {
+                    return 'Cluster URL is required';
+                }
+                if (!value.includes('.kusto.windows.net') && !value.includes('localhost') && !value.includes('127.0.0.1')) {
+                    return 'Please enter a valid Kusto cluster URL';
+                }
+                return null;
+            }
+        });
+
+        if (clusterUrl) {
+            await connectionProvider.addCluster(clusterUrl);
+        }
+    });
+
+    const refreshConnectionsCommand = vscode.commands.registerCommand('kustox.refreshConnections', () => {
+        connectionProvider.refresh();
+        vscode.window.showInformationMessage('Connection tree refreshed.');
+    });
+
+    const connectToDatabaseCommand = vscode.commands.registerCommand('kustox.connectToDatabase', (item: ConnectionTreeItem) => {
+        connectionProvider.connectToDatabase(item);
+    });
+
+    const removeClusterCommand = vscode.commands.registerCommand('kustox.removeCluster', async (item: ConnectionTreeItem) => {
+        const answer = await vscode.window.showWarningMessage(
+            `Are you sure you want to remove cluster "${item.item.name}"?`,
+            'Yes', 'No'
+        );
+        
+        if (answer === 'Yes') {
+            connectionProvider.removeCluster(item);
+        }
+    });
+
+    const copyConnectionStringCommand = vscode.commands.registerCommand('kustox.copyConnectionString', (item: ConnectionTreeItem) => {
+        connectionProvider.copyConnectionString(item);
+    });
+
+    context.subscriptions.push(
+        openExplorer, 
+        helloWorld, 
+        createKustoFile, 
+        configureConnection, 
+        executeQuery, 
+        disconnectKusto,
+        addClusterCommand,
+        refreshConnectionsCommand,
+        connectToDatabaseCommand,
+        removeClusterCommand,
+        copyConnectionStringCommand
+    );
 
     // Register integration tests
     registerIntegrationTests(context);

@@ -1,7 +1,7 @@
 {
   "name": "kustox",
   "displayName": "KustoX - Modern Kusto Explorer",
-  "description": "A powerful Visual Studio Code extension designed to modernize and simplify your data exploration workflow with AI capabilities",
+  "description": "A powerful Visual Studio Code extension to modernize and simplify your data exploration workflow with AI capabilities",
   "version": "0.1.0",
   "publisher": "kustox",
   "repository": {
@@ -101,8 +101,49 @@
         "title": "Run Comprehensive Tests",
         "category": "KustoX",
         "icon": "$(checklist)"
+      },
+      {
+        "command": "kustox.addCluster",
+        "title": "Add Cluster",
+        "category": "KustoX",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kustox.refreshConnections",
+        "title": "Refresh",
+        "category": "KustoX",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kustox.connectToDatabase",
+        "title": "Connect to Database",
+        "category": "KustoX",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "kustox.removeCluster",
+        "title": "Remove Cluster",
+        "category": "KustoX",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kustox.copyConnectionString",
+        "title": "Copy Connection String",
+        "category": "KustoX",
+        "icon": "$(clippy)"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "kustoxConnections",
+          "name": "Kusto Clusters",
+          "when": "true",
+          "icon": "$(server-environment)",
+          "visibility": "visible"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {
@@ -115,6 +156,35 @@
         {
           "command": "kustox.executeQuery",
           "when": "resourceExtname == .kql || resourceExtname == .kusto"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "kustox.addCluster",
+          "when": "view == kustoxConnections",
+          "group": "navigation"
+        },
+        {
+          "command": "kustox.refreshConnections",
+          "when": "view == kustoxConnections",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "kustox.connectToDatabase",
+          "when": "view == kustoxConnections && viewItem == database",
+          "group": "inline"
+        },
+        {
+          "command": "kustox.removeCluster",
+          "when": "view == kustoxConnections && viewItem == cluster",
+          "group": "context"
+        },
+        {
+          "command": "kustox.copyConnectionString",
+          "when": "view == kustoxConnections && (viewItem == cluster || viewItem == database)",
+          "group": "context"
         }
       ]
     },
