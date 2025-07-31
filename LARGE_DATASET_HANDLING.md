@@ -1,5 +1,35 @@
 # KustoX Large Dataset Handling
 
+## ✅ SIMPLIFIED: Pagination Removed
+
+The manual pagination feature has been **removed** to simplify the extension. The large dataset handling now focuses solely on:
+
+1. **Primary Query Execution**: Standard query execution with enhanced parameters
+2. **Automatic Fallback System**: Progressive `| take` limits when queries fail due to 64MB limit
+3. **No Manual Pagination**: Users can add their own `| skip X | take Y` clauses if needed
+
+## ✅ CLARIFICATION: Multiple Take Clauses Are Valid in Kusto
+
+### Understanding Kusto Take Behavior
+Kusto supports multiple `| take` clauses in a single query and will use the **minimum value**:
+
+```kusto
+-- This is VALID syntax:
+MyTable | take 5000 | take 1000  ✅ Returns 1000 rows (minimum)
+
+-- This is also valid:
+MyTable | where condition | take 10000 | take 100  ✅ Returns 100 rows
+```
+
+### Current Implementation Strategy ✅
+The fallback mechanism correctly appends `| take X` to all queries because:
+
+1. **For queries without take**: `MyTable | where condition` → `MyTable | where condition | take 1000`
+2. **For queries with take**: `MyTable | take 5000` → `MyTable | take 5000 | take 1000` (returns 1000 rows)
+3. **Kusto takes minimum**: If original query has `| take 5000` and fallback adds `| take 100`, result is 100 rows
+
+This approach ensures fallback always works with progressively smaller limits until success.
+
 ## Overview
 
 This document describes the enhanced large dataset handling capabilities implemented in KustoX to address the Azure Kusto SDK's 64MB query result limit, similar to Kusto Explorer's behavior.

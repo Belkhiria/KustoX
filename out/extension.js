@@ -561,9 +561,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
     const executeQuery = vscode.commands.registerCommand('kustox.executeQuery', async () => {
         await executeKustoQuery();
     });
-    const executeQueryWithPagination = vscode.commands.registerCommand('kustox.executeQueryWithPagination', async () => {
-        await executeKustoQueryWithPagination();
-    });
     const disconnectKusto = vscode.commands.registerCommand('kustox.disconnect', async () => {
         kustoConnection = null;
         updateConnectionStatus();
@@ -758,163 +755,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             vscode.window.showErrorMessage(`❌ Failed to connect to Kusto: ${errorMessage}`);
             console.error('Kusto connection error:', error);
         }
-    }
-    async function executeKustoQueryWithPagination() {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showErrorMessage('No active editor found. Please open a Kusto (.kql) file.');
-            return;
-        }
-        if (editor.document.languageId !== 'kusto') {
-            vscode.window.showErrorMessage('Please open a Kusto (.kql) file to execute queries.');
-            return;
-        }
-        if (!kustoConnection) {
-            const configure = await vscode.window.showErrorMessage('No Kusto connection configured. Would you like to configure one now?', 'Configure Connection');
-            if (configure) {
-                await configureKustoConnection();
-                if (!kustoConnection) {
-                    return;
-                }
-            }
-            else {
-                return;
-            }
-        }
-        // Get the query text (selected text or entire document)
-        const query = editor.selection.isEmpty
-            ? editor.document.getText()
-            : editor.document.getText(editor.selection);
-        if (!query.trim()) {
-            vscode.window.showErrorMessage('No query found. Please write a Kusto query first.');
-            return;
-        }
-        // Ask user for pagination settings
-        const pageSize = await vscode.window.showInputBox({
-            prompt: 'Enter page size (number of rows per page)',
-            value: '1000',
-            validateInput: (value) => {
-                const num = parseInt(value);
-                if (isNaN(num) || num <= 0 || num > 100000) {
-                    return 'Please enter a valid number between 1 and 100,000';
-                }
-                return null;
-            }
-        });
-        if (!pageSize)
-            return;
-        const maxPages = await vscode.window.showInputBox({
-            prompt: 'Enter maximum number of pages to retrieve (1-100)',
-            value: '10',
-            validateInput: (value) => {
-                const num = parseInt(value);
-                if (isNaN(num) || num <= 0 || num > 100) {
-                    return 'Please enter a valid number between 1 and 100';
-                }
-                return null;
-            }
-        });
-        if (!maxPages)
-            return;
-        const pageSizeNum = parseInt(pageSize);
-        const maxPagesNum = parseInt(maxPages);
-        await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: "Executing paginated Kusto query...",
-            cancellable: true
-        }, async (progress, token) => {
-            try {
-                const allResults = [];
-                let totalRows = 0;
-                const cleanQuery = query.trim().replace(/;$/, '');
-                progress.report({ increment: 0, message: "Starting paginated execution..." });
-                for (let page = 0; page < maxPagesNum; page++) {
-                    if (token.isCancellationRequested) {
-                        break;
-                    }
-                    const skip = page * pageSizeNum;
-                    const paginatedQuery = `${cleanQuery} | skip ${skip} | take ${pageSizeNum}`;
-                    progress.report({
-                        increment: (page / maxPagesNum) * 90,
-                        message: `Loading page ${page + 1}/${maxPagesNum} (${totalRows} rows so far)...`
-                    });
-                    console.log(`🔄 Executing page ${page + 1}: skip ${skip}, take ${pageSizeNum}`);
-                    try {
-                        const crp = new ClientRequestProperties();
-                        crp.clientRequestId = `KustoX-Page-${page + 1}-${generateUUID()}`;
-                        crp.setTimeout(2 * 60 * 1000);
-                        const startTime = Date.now();
-                        const response = await kustoConnection.client.execute(kustoConnection.database, paginatedQuery, crp);
-                        const executionTime = Date.now() - startTime;
-                        const results = processKustoResponse(response, executionTime);
-                        if (results.hasData && results.rows.length > 0) {
-                            if (page === 0) {
-                                // First page - capture column structure
-                                allResults.push(...results.rows);
-                                totalRows = results.rows.length;
-                            }
-                            else {
-                                // Subsequent pages - just add rows
-                                allResults.push(...results.rows);
-                                totalRows += results.rows.length;
-                            }
-                            console.log(`✅ Page ${page + 1} completed: ${results.rows.length} rows`);
-                            // If we got fewer rows than requested, we've reached the end
-                            if (results.rows.length < pageSizeNum) {
-                                console.log(`🏁 Reached end of data at page ${page + 1}`);
-                                break;
-                            }
-                        }
-                        else {
-                            console.log(`🏁 No more data at page ${page + 1}`);
-                            break;
-                        }
-                    }
-                    catch (pageError) {
-                        console.log(`❌ Page ${page + 1} failed:`, pageError.message);
-                        // If a page fails, stop pagination but show what we have
-                        break;
-                    }
-                }
-                progress.report({ increment: 100, message: "Combining results..." });
-                if (allResults.length > 0) {
-                    // Create combined results
-                    const combinedResults = {
-                        columns: [],
-                        rows: allResults,
-                        hasData: true,
-                        rowCount: totalRows,
-                        executionTime: '0ms',
-                        isPartial: true,
-                        truncationReason: `Paginated results: ${totalRows} rows across multiple pages (page size: ${pageSizeNum})`
-                    };
-                    // Get columns from a sample query
-                    try {
-                        const sampleQuery = `${cleanQuery} | take 1`;
-                        const sampleCrp = new ClientRequestProperties();
-                        sampleCrp.clientRequestId = `KustoX-Sample-${generateUUID()}`;
-                        const sampleResponse = await kustoConnection.client.execute(kustoConnection.database, sampleQuery, sampleCrp);
-                        const sampleResults = processKustoResponse(sampleResponse, 0);
-                        combinedResults.columns = sampleResults.columns;
-                    }
-                    catch {
-                        // If sample query fails, create generic columns
-                        combinedResults.columns = allResults[0]?.map((_, index) => `Column${index + 1}`) || [];
-                    }
-                    console.log(`✅ Paginated execution completed: ${totalRows} total rows`);
-                    showQueryResults(query, combinedResults, kustoConnection);
-                    vscode.window.showInformationMessage(`✅ Paginated query completed: ${totalRows} rows retrieved across ${Math.ceil(totalRows / pageSizeNum)} pages`);
-                }
-                else {
-                    vscode.window.showWarningMessage('No data retrieved from paginated query');
-                }
-            }
-            catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-                vscode.window.showErrorMessage(`❌ Paginated query failed: ${errorMessage}`);
-                console.error('Paginated query error:', error);
-            }
-        });
     }
     async function executeKustoQuery() {
         const editor = vscode.window.activeTextEditor;
@@ -1470,25 +1310,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             oneApiErrors,
             rawError: error
         };
-    }
-    function addTakeClauseToQuery(query, limit) {
-        try {
-            // Clean the query and remove comments
-            const lines = query.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('//'));
-            const cleanQuery = lines.join(' ').trim();
-            // Check if the query already has a take/limit clause
-            const hasTake = /\|\s*take\s+\d+/i.test(cleanQuery) || /\|\s*limit\s+\d+/i.test(cleanQuery);
-            if (hasTake) {
-                console.log('🔄 Query already has take/limit clause, using as-is');
-                return cleanQuery;
-            }
-            // Add take clause at the end
-            return `${cleanQuery} | take ${limit}`;
-        }
-        catch (error) {
-            console.log('🔄 Error adding take clause, using original query:', error);
-            return query;
-        }
     }
     function checkForTruncation(response, results) {
         try {
