@@ -143,6 +143,24 @@
         "title": "Refresh Tables",
         "category": "KustoX",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "kustox.showConnectionStatus",
+        "title": "Show Connection Status",
+        "category": "KustoX",
+        "icon": "$(database)"
+      },
+      {
+        "command": "kustox.copyResults",
+        "title": "Copy Results",
+        "category": "KustoX", 
+        "icon": "$(copy)"
+      },
+      {
+        "command": "kustox.copyChart",
+        "title": "Copy Chart",
+        "category": "KustoX",
+        "icon": "$(graph)"
       }
     ],
     "views": {
@@ -154,6 +172,14 @@
           "icon": "$(server-environment)",
           "visibility": "visible"
         }
+      ],
+      "panel": [
+        {
+          "id": "kustoxResults",
+          "name": "Query Results",
+          "when": "kustox.hasResults",
+          "icon": "$(output)"
+        }
       ]
     },
     "menus": {
@@ -161,13 +187,17 @@
         {
           "command": "kustox.executeQuery",
           "when": "resourceExtname == .kql || resourceExtname == .kusto",
-          "group": "navigation"
-        }
-      ],
-      "editor/title/run": [
+          "group": "navigation@1"
+        },
         {
-          "command": "kustox.executeQuery",
-          "when": "resourceExtname == .kql || resourceExtname == .kusto"
+          "command": "kustox.addCluster", 
+          "when": "resourceExtname == .kql || resourceExtname == .kusto",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kustox.showConnectionStatus",
+          "when": "resourceExtname == .kql || resourceExtname == .kusto", 
+          "group": "navigation@3"
         }
       ],
       "view/title": [

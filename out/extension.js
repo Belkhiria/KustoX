@@ -369,6 +369,8 @@ class ConnectionTreeProvider {
                     cluster: item.item.cluster,
                     database: item.item.database
                 };
+                // Update status bar to show the new connection
+                updateConnectionStatus();
                 vscode.window.showInformationMessage(`Connected to ${item.item.database} on ${item.item.cluster}`);
                 // Trigger a refresh of the tree to show tables
                 console.log('Refreshing tree to show tables...');
@@ -472,8 +474,27 @@ class ConnectionTreeProvider {
     }
 }
 let kustoConnection = null;
+let connectionStatusBarItem;
+function updateConnectionStatus() {
+    if (kustoConnection) {
+        const clusterName = kustoConnection.cluster.replace(/^https?:\/\//, '').split('.')[0];
+        connectionStatusBarItem.text = `$(database) ${clusterName}/${kustoConnection.database}`;
+        connectionStatusBarItem.tooltip = `Connected to ${kustoConnection.cluster}/${kustoConnection.database}`;
+        connectionStatusBarItem.show();
+    }
+    else {
+        connectionStatusBarItem.text = `$(database) Not connected`;
+        connectionStatusBarItem.tooltip = 'Click to configure Kusto connection';
+        connectionStatusBarItem.show();
+    }
+}
 function activate(context) {
     console.log('KustoX extension is now active!');
+    // Create status bar item
+    connectionStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    connectionStatusBarItem.command = 'kustox.configureConnection';
+    updateConnectionStatus();
+    context.subscriptions.push(connectionStatusBarItem);
     // Create the connection tree provider first so it can be used by other functions
     const connectionProvider = new ConnectionTreeProvider(context);
     vscode.window.registerTreeDataProvider('kustoxConnections', connectionProvider);
@@ -540,9 +561,30 @@ print "🚀 KustoX is ready! Configure your connection to get started."
     const executeQuery = vscode.commands.registerCommand('kustox.executeQuery', async () => {
         await executeKustoQuery();
     });
+    const executeQueryWithPagination = vscode.commands.registerCommand('kustox.executeQueryWithPagination', async () => {
+        await executeKustoQueryWithPagination();
+    });
     const disconnectKusto = vscode.commands.registerCommand('kustox.disconnect', async () => {
         kustoConnection = null;
+        updateConnectionStatus();
         vscode.window.showInformationMessage('Disconnected from Kusto cluster');
+    });
+    const showConnectionStatus = vscode.commands.registerCommand('kustox.showConnectionStatus', async () => {
+        if (kustoConnection) {
+            const clusterName = kustoConnection.cluster.replace(/^https?:\/\//, '');
+            vscode.window.showInformationMessage(`✅ Connected to ${clusterName}/${kustoConnection.database}`, 'Disconnect').then(selection => {
+                if (selection === 'Disconnect') {
+                    vscode.commands.executeCommand('kustox.disconnect');
+                }
+            });
+        }
+        else {
+            vscode.window.showInformationMessage('❌ Not connected to any Kusto cluster', 'Configure Connection').then(selection => {
+                if (selection === 'Configure Connection') {
+                    vscode.commands.executeCommand('kustox.configureConnection');
+                }
+            });
+        }
     });
     async function configureKustoConnection() {
         try {
@@ -698,6 +740,8 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     cluster: clusterUrl,
                     database
                 };
+                // Update status bar to show connection
+                updateConnectionStatus();
                 // Also add the cluster to the connection tree for future use
                 try {
                     await connectionProvider.addCluster(clusterUrl);
@@ -714,6 +758,163 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             vscode.window.showErrorMessage(`❌ Failed to connect to Kusto: ${errorMessage}`);
             console.error('Kusto connection error:', error);
         }
+    }
+    async function executeKustoQueryWithPagination() {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showErrorMessage('No active editor found. Please open a Kusto (.kql) file.');
+            return;
+        }
+        if (editor.document.languageId !== 'kusto') {
+            vscode.window.showErrorMessage('Please open a Kusto (.kql) file to execute queries.');
+            return;
+        }
+        if (!kustoConnection) {
+            const configure = await vscode.window.showErrorMessage('No Kusto connection configured. Would you like to configure one now?', 'Configure Connection');
+            if (configure) {
+                await configureKustoConnection();
+                if (!kustoConnection) {
+                    return;
+                }
+            }
+            else {
+                return;
+            }
+        }
+        // Get the query text (selected text or entire document)
+        const query = editor.selection.isEmpty
+            ? editor.document.getText()
+            : editor.document.getText(editor.selection);
+        if (!query.trim()) {
+            vscode.window.showErrorMessage('No query found. Please write a Kusto query first.');
+            return;
+        }
+        // Ask user for pagination settings
+        const pageSize = await vscode.window.showInputBox({
+            prompt: 'Enter page size (number of rows per page)',
+            value: '1000',
+            validateInput: (value) => {
+                const num = parseInt(value);
+                if (isNaN(num) || num <= 0 || num > 100000) {
+                    return 'Please enter a valid number between 1 and 100,000';
+                }
+                return null;
+            }
+        });
+        if (!pageSize)
+            return;
+        const maxPages = await vscode.window.showInputBox({
+            prompt: 'Enter maximum number of pages to retrieve (1-100)',
+            value: '10',
+            validateInput: (value) => {
+                const num = parseInt(value);
+                if (isNaN(num) || num <= 0 || num > 100) {
+                    return 'Please enter a valid number between 1 and 100';
+                }
+                return null;
+            }
+        });
+        if (!maxPages)
+            return;
+        const pageSizeNum = parseInt(pageSize);
+        const maxPagesNum = parseInt(maxPages);
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Executing paginated Kusto query...",
+            cancellable: true
+        }, async (progress, token) => {
+            try {
+                const allResults = [];
+                let totalRows = 0;
+                const cleanQuery = query.trim().replace(/;$/, '');
+                progress.report({ increment: 0, message: "Starting paginated execution..." });
+                for (let page = 0; page < maxPagesNum; page++) {
+                    if (token.isCancellationRequested) {
+                        break;
+                    }
+                    const skip = page * pageSizeNum;
+                    const paginatedQuery = `${cleanQuery} | skip ${skip} | take ${pageSizeNum}`;
+                    progress.report({
+                        increment: (page / maxPagesNum) * 90,
+                        message: `Loading page ${page + 1}/${maxPagesNum} (${totalRows} rows so far)...`
+                    });
+                    console.log(`🔄 Executing page ${page + 1}: skip ${skip}, take ${pageSizeNum}`);
+                    try {
+                        const crp = new ClientRequestProperties();
+                        crp.clientRequestId = `KustoX-Page-${page + 1}-${generateUUID()}`;
+                        crp.setTimeout(2 * 60 * 1000);
+                        const startTime = Date.now();
+                        const response = await kustoConnection.client.execute(kustoConnection.database, paginatedQuery, crp);
+                        const executionTime = Date.now() - startTime;
+                        const results = processKustoResponse(response, executionTime);
+                        if (results.hasData && results.rows.length > 0) {
+                            if (page === 0) {
+                                // First page - capture column structure
+                                allResults.push(...results.rows);
+                                totalRows = results.rows.length;
+                            }
+                            else {
+                                // Subsequent pages - just add rows
+                                allResults.push(...results.rows);
+                                totalRows += results.rows.length;
+                            }
+                            console.log(`✅ Page ${page + 1} completed: ${results.rows.length} rows`);
+                            // If we got fewer rows than requested, we've reached the end
+                            if (results.rows.length < pageSizeNum) {
+                                console.log(`🏁 Reached end of data at page ${page + 1}`);
+                                break;
+                            }
+                        }
+                        else {
+                            console.log(`🏁 No more data at page ${page + 1}`);
+                            break;
+                        }
+                    }
+                    catch (pageError) {
+                        console.log(`❌ Page ${page + 1} failed:`, pageError.message);
+                        // If a page fails, stop pagination but show what we have
+                        break;
+                    }
+                }
+                progress.report({ increment: 100, message: "Combining results..." });
+                if (allResults.length > 0) {
+                    // Create combined results
+                    const combinedResults = {
+                        columns: [],
+                        rows: allResults,
+                        hasData: true,
+                        rowCount: totalRows,
+                        executionTime: '0ms',
+                        isPartial: true,
+                        truncationReason: `Paginated results: ${totalRows} rows across multiple pages (page size: ${pageSizeNum})`
+                    };
+                    // Get columns from a sample query
+                    try {
+                        const sampleQuery = `${cleanQuery} | take 1`;
+                        const sampleCrp = new ClientRequestProperties();
+                        sampleCrp.clientRequestId = `KustoX-Sample-${generateUUID()}`;
+                        const sampleResponse = await kustoConnection.client.execute(kustoConnection.database, sampleQuery, sampleCrp);
+                        const sampleResults = processKustoResponse(sampleResponse, 0);
+                        combinedResults.columns = sampleResults.columns;
+                    }
+                    catch {
+                        // If sample query fails, create generic columns
+                        combinedResults.columns = allResults[0]?.map((_, index) => `Column${index + 1}`) || [];
+                    }
+                    console.log(`✅ Paginated execution completed: ${totalRows} total rows`);
+                    showQueryResults(query, combinedResults, kustoConnection);
+                    vscode.window.showInformationMessage(`✅ Paginated query completed: ${totalRows} rows retrieved across ${Math.ceil(totalRows / pageSizeNum)} pages`);
+                }
+                else {
+                    vscode.window.showWarningMessage('No data retrieved from paginated query');
+                }
+            }
+            catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                vscode.window.showErrorMessage(`❌ Paginated query failed: ${errorMessage}`);
+                console.error('Paginated query error:', error);
+            }
+        });
     }
     async function executeKustoQuery() {
         const editor = vscode.window.activeTextEditor;
@@ -780,6 +981,19 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 crp.clientRequestId = `KustoX-${generateUUID()}`;
                 // Set the query timeout to 5 minutes
                 crp.setTimeout(5 * 60 * 1000);
+                // Try to enable partial results on truncation (this might help with 64MB limits)
+                try {
+                    // Use higher limits to maximize successful queries before hitting SDK limits
+                    crp.setParameter('truncationmaxsize', '134217728'); // 128MB - higher than default 64MB
+                    crp.setParameter('truncationmaxrecords', '1000000'); // 1M records - higher than default
+                    crp.setParameter('notruncation', 'true'); // Disable truncation to try to get more data
+                    crp.setParameter('query_results_progressive_enabled', 'true'); // Enable progressive results
+                    crp.setParameter('deferpartialqueryfailures', 'true'); // Allow partial failures
+                    console.log('🔧 Applied enhanced query settings with higher limits');
+                }
+                catch (paramError) {
+                    console.log('Could not set query parameters (might not be supported):', paramError);
+                }
                 // Add application context
                 crp.setOption('application', 'KustoX-VSCode-Extension');
                 crp.setOption('version', '0.1.0');
@@ -805,6 +1019,44 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 progress.report({ increment: 80, message: "Processing results..." });
                 // Process the response using official patterns
                 const results = processKustoResponse(response, executionTime);
+                // Check if the response indicates truncation/limits
+                const isTruncated = checkForTruncation(response, results);
+                if (isTruncated.truncated) {
+                    console.log('🔍 Detected truncated results in successful response');
+                    // Mark results as partial
+                    results.isPartial = true;
+                    results.truncationReason = isTruncated.reason;
+                    // Show both results and warning like Kusto Explorer
+                    showQueryResults(query, results, kustoConnection);
+                    // Show warning in separate window
+                    setTimeout(() => {
+                        const truncationError = {
+                            summary: `Query results were truncated: ${isTruncated.reason}`,
+                            category: 'Warning',
+                            severity: 'Warning',
+                            details: `The query returned partial results due to: ${isTruncated.reason}. Consider modifying your query to reduce the result set size.`,
+                            suggestions: [
+                                'Add a "take" or "limit" clause to your query',
+                                'Use summarization or aggregation to reduce data volume',
+                                'Filter your data with "where" clauses',
+                                'Consider breaking large queries into smaller parts'
+                            ]
+                        };
+                        showQueryError(query, truncationError, kustoConnection);
+                    }, 500);
+                    vscode.window.showWarningMessage(`⚠️ Query results truncated: ${isTruncated.reason}. Showing partial results. Details opened in second window.`, 'View Details').then(selection => {
+                        if (selection === 'View Details') {
+                            const truncationError = {
+                                summary: `Query results were truncated: ${isTruncated.reason}`,
+                                category: 'Warning',
+                                severity: 'Warning',
+                                details: `The query returned partial results due to: ${isTruncated.reason}`
+                            };
+                            showQueryError(query, truncationError, kustoConnection);
+                        }
+                    });
+                    return;
+                }
                 progress.report({ increment: 100, message: "Complete!" });
                 // Show results in a new panel
                 showQueryResults(query, results, kustoConnection);
@@ -813,10 +1065,263 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         catch (error) {
             // Enhanced error handling for detailed Kusto errors
             let detailedError = parseKustoError(error);
-            vscode.window.showErrorMessage(`❌ Query execution failed: ${detailedError.summary}`);
             console.error('Query execution error:', error);
             console.error('Parsed error details:', detailedError);
-            // Show detailed error in results panel
+            // Check if this is a query limit exceeded error that might have partial results
+            const isQueryLimitError = detailedError.summary.includes('E_QUERY_RESULT_SET_TOO_LARGE') ||
+                detailedError.summary.includes('80DA0003') ||
+                detailedError.summary.includes('exceeded the allowed limits') ||
+                detailedError.summary.includes('64 MB') ||
+                detailedError.summary.includes('result set too large') ||
+                detailedError.summary.includes('ResultSetTooLarge') ||
+                detailedError.summary.toLowerCase().includes('truncat');
+            if (isQueryLimitError) {
+                console.log('🔍 Detected query limit error. Investigating for partial results...');
+                const errorObj = error;
+                console.log('🔍 Error object type:', typeof errorObj);
+                console.log('🔍 Error object keys:', Object.keys(errorObj || {}));
+                console.log('🔍 Error message:', errorObj.message);
+                // Try to serialize the error safely
+                try {
+                    console.log('🔍 Full error object:', JSON.stringify(errorObj, Object.getOwnPropertyNames(errorObj), 2));
+                }
+                catch (jsonError) {
+                    console.log('🔍 Could not stringify error, trying individual properties...');
+                    console.log('🔍 Error name:', errorObj.name);
+                    console.log('🔍 Error stack:', errorObj.stack);
+                    console.log('🔍 Error custom properties:', Object.getOwnPropertyNames(errorObj));
+                }
+                let hasPartialResults = false;
+                // Check multiple potential locations for partial results
+                const potentialSources = [
+                    { name: 'response.data', source: errorObj.response?.data },
+                    { name: 'data', source: errorObj.data },
+                    { name: 'response', source: errorObj.response },
+                    { name: 'errorObj', source: errorObj },
+                    { name: 'kustoResponse', source: errorObj.kustoResponse },
+                    { name: 'partialResult', source: errorObj.partialResult },
+                    { name: 'results', source: errorObj.results },
+                    { name: 'httpResponse', source: errorObj.httpResponse },
+                    { name: 'rawResponse', source: errorObj.rawResponse },
+                    { name: 'body', source: errorObj.body },
+                    { name: 'responseBody', source: errorObj.responseBody }
+                ];
+                for (const { name, source } of potentialSources) {
+                    if (!source) {
+                        console.log(`🔍 ${name}: null/undefined`);
+                        continue;
+                    }
+                    console.log(`🔍 Checking ${name} for partial results:`, {
+                        type: typeof source,
+                        keys: Object.keys(source || {}),
+                        isArray: Array.isArray(source)
+                    });
+                    // Look for Tables in various response structures
+                    const tableSources = [
+                        { tableName: `${name}.Tables`, tables: source.Tables },
+                        { tableName: `${name}.tables`, tables: source.tables },
+                        { tableName: `${name}.primaryResults[0].Tables`, tables: source.primaryResults?.[0]?.Tables },
+                        { tableName: `${name}.dataSet.Tables`, tables: source.dataSet?.Tables },
+                        { tableName: `${name}.dataSetV2.Tables`, tables: source.dataSetV2?.Tables },
+                        { tableName: `${name}.response.Tables`, tables: source.response?.Tables }
+                    ];
+                    for (const { tableName, tables } of tableSources) {
+                        if (tables && Array.isArray(tables) && tables.length > 0) {
+                            console.log(`🔍 Found ${tables.length} tables in ${tableName}`);
+                            for (let i = 0; i < tables.length; i++) {
+                                const table = tables[i];
+                                console.log(`🔍 Table ${i} in ${tableName}:`, {
+                                    hasColumns: !!table.Columns,
+                                    hasRows: !!table.Rows,
+                                    columnCount: table.Columns?.length || 0,
+                                    rowCount: table.Rows?.length || 0,
+                                    tableKind: table.TableKind || table.tableKind,
+                                    tableName: table.TableName || table.tableName
+                                });
+                                if (table.Columns && table.Rows && table.Rows.length > 0) {
+                                    // We have partial results! Create a results object
+                                    const partialResults = {
+                                        columns: table.Columns.map((col) => col.ColumnName || col.Name || col),
+                                        rows: table.Rows,
+                                        hasData: true,
+                                        rowCount: table.Rows.length,
+                                        executionTime: '0ms',
+                                        isPartial: true
+                                    };
+                                    hasPartialResults = true;
+                                    console.log(`✅ Found ${partialResults.rowCount} partial rows despite error in ${tableName}`);
+                                    // Show BOTH: partial results AND error details (like Kusto Explorer)
+                                    showQueryResults(query, partialResults, kustoConnection);
+                                    // Also show error in a separate window after a brief delay
+                                    setTimeout(() => {
+                                        showQueryError(query, detailedError, kustoConnection);
+                                    }, 500);
+                                    // Show notification about the situation
+                                    vscode.window.showWarningMessage(`⚠️ Query limit exceeded. Showing ${partialResults.rowCount} partial results. Error details opened in second window.`, 'View Error Details').then(selection => {
+                                        if (selection === 'View Error Details') {
+                                            showQueryError(query, detailedError, kustoConnection);
+                                        }
+                                    });
+                                    return; // Exit early since we handled the partial results case
+                                }
+                            }
+                        }
+                        else {
+                            console.log(`🔍 ${tableName}: ${tables ? 'not array or empty' : 'null/undefined'}`);
+                        }
+                    }
+                }
+                console.log('❌ No partial results found in any checked location');
+                // Fallback approach: Use streaming query to get incremental results
+                console.log('🔄 Attempting streaming/incremental results approach...');
+                try {
+                    // Try different approaches to get partial results with enhanced streaming
+                    const approaches = [
+                        {
+                            name: 'Enhanced streaming (100K rows)',
+                            query: `${cleanQuery} | take 100000`,
+                            limit: 100000,
+                            useStreaming: true,
+                            timeout: 5 * 60 * 1000
+                        },
+                        {
+                            name: 'Large chunks (10K rows)',
+                            query: `${cleanQuery} | take 10000`,
+                            limit: 10000,
+                            useStreaming: true,
+                            timeout: 3 * 60 * 1000
+                        },
+                        {
+                            name: 'Medium chunks (1000 rows)',
+                            query: `${cleanQuery} | take 1000`,
+                            limit: 1000,
+                            useStreaming: false,
+                            timeout: 2 * 60 * 1000
+                        },
+                        {
+                            name: 'Small chunks (100 rows)',
+                            query: `${cleanQuery} | take 100`,
+                            limit: 100,
+                            useStreaming: false,
+                            timeout: 60 * 1000
+                        },
+                        {
+                            name: 'Minimal chunk (10 rows)',
+                            query: `${cleanQuery} | take 10`,
+                            limit: 10,
+                            useStreaming: false,
+                            timeout: 30 * 1000
+                        }
+                    ];
+                    for (const approach of approaches) {
+                        console.log(`🔄 Trying ${approach.name}...`);
+                        try {
+                            // Create new client request properties for incremental query
+                            const incrementalCrp = new ClientRequestProperties();
+                            incrementalCrp.clientRequestId = `KustoX-Incremental-${generateUUID()}`;
+                            incrementalCrp.setTimeout(approach.timeout || 2 * 60 * 1000);
+                            // Enhanced streaming parameters based on Azure Kusto SDK documentation
+                            if (approach.useStreaming) {
+                                try {
+                                    // Enable progressive results and streaming
+                                    incrementalCrp.setOption('query_results_progressive_enabled', true);
+                                    incrementalCrp.setOption('deferpartialqueryfailures', true);
+                                    incrementalCrp.setOption('results_progressive_enabled', true);
+                                    incrementalCrp.setOption('notruncation', true); // Disable automatic truncation
+                                    incrementalCrp.setOption('truncationmaxrecords', 1000000); // High limit
+                                    incrementalCrp.setOption('truncationmaxsize', 134217728); // 128 MB limit
+                                    incrementalCrp.setOption('servertimeout', '00:05:00'); // Server timeout
+                                    console.log(`🔄 Using enhanced streaming parameters for ${approach.name}`);
+                                }
+                                catch (streamParamError) {
+                                    console.log('🔄 Enhanced streaming parameters not supported, using basic streaming');
+                                    try {
+                                        incrementalCrp.setParameter('query_results_progressive_enabled', 'true');
+                                        incrementalCrp.setParameter('deferpartialqueryfailures', 'true');
+                                    }
+                                    catch (basicParamError) {
+                                        console.log('🔄 Basic streaming parameters not supported, continuing with standard query');
+                                    }
+                                }
+                            }
+                            else {
+                                // Standard parameters for smaller chunks
+                                incrementalCrp.setParameter('query_results_cache_max_age', '0'); // Don't cache
+                            }
+                            const incrementalStartTime = Date.now();
+                            const incrementalResponse = await kustoConnection.client.execute(kustoConnection.database, approach.query, incrementalCrp);
+                            const incrementalExecutionTime = Date.now() - incrementalStartTime;
+                            const incrementalResults = processKustoResponse(incrementalResponse, incrementalExecutionTime);
+                            if (incrementalResults.hasData) {
+                                // Mark as partial results
+                                incrementalResults.isPartial = true;
+                                incrementalResults.truncationReason = `Original query exceeded 64MB limit - showing first ${approach.limit} rows using ${approach.name}`;
+                                console.log(`✅ ${approach.name} successful: Retrieved ${incrementalResults.rowCount} rows`);
+                                // Show BOTH: partial results AND error details (like Kusto Explorer)
+                                showQueryResults(query, incrementalResults, kustoConnection);
+                                // Also show error in a separate window after a brief delay
+                                setTimeout(() => {
+                                    const enhancedError = {
+                                        ...detailedError,
+                                        suggestions: [
+                                            'Consider using pagination with "take" and "skip" operators',
+                                            'Try the "KustoX: Execute Query with Pagination" command for very large datasets',
+                                            'Add more specific "where" clauses to filter data',
+                                            'Use "summarize" to aggregate large datasets',
+                                            'Break the query into smaller time windows',
+                                            `Current approach showed ${incrementalResults.rowCount} rows - you can adjust the limit`,
+                                            'For datasets with very large individual rows, consider selecting fewer columns'
+                                        ]
+                                    };
+                                    showQueryError(query, enhancedError, kustoConnection);
+                                }, 500);
+                                // Show notification about the situation
+                                vscode.window.showWarningMessage(`⚠️ Query limit exceeded. Showing first ${incrementalResults.rowCount} rows (${approach.name}). Error details opened in second window.`, 'View Error Details', 'Try Smaller Chunk').then(selection => {
+                                    if (selection === 'View Error Details') {
+                                        const enhancedError = {
+                                            ...detailedError,
+                                            suggestions: [
+                                                'Consider using pagination with "take" and "skip" operators',
+                                                'Add more specific "where" clauses to filter data',
+                                                'Use "summarize" to aggregate large datasets'
+                                            ]
+                                        };
+                                        showQueryError(query, enhancedError, kustoConnection);
+                                    }
+                                    else if (selection === 'Try Smaller Chunk') {
+                                        vscode.window.showInformationMessage('You can modify your query with smaller limits like:\n' +
+                                            '• YourQuery | take 100\n' +
+                                            '• YourQuery | take 10\n' +
+                                            '• YourQuery | where [conditions] | take 1000');
+                                    }
+                                });
+                                return; // Exit early since we handled the partial results case
+                            }
+                        }
+                        catch (incrementalError) {
+                            console.log(`❌ ${approach.name} failed:`, incrementalError.message);
+                            // Continue to next approach
+                        }
+                    }
+                    console.log('❌ All incremental approaches failed');
+                }
+                catch (incrementalError) {
+                    console.log('❌ Incremental query approach failed:', incrementalError);
+                    // Continue to show the original error if all fallbacks fail
+                }
+                // If no partial results found, show enhanced warning message
+                if (!hasPartialResults) {
+                    vscode.window.showWarningMessage(`⚠️ ${detailedError.summary}`, 'View Details').then(selection => {
+                        if (selection === 'View Details') {
+                            showQueryError(query, detailedError, kustoConnection);
+                        }
+                    });
+                    showQueryError(query, detailedError, kustoConnection);
+                    return;
+                }
+            }
+            // For all other errors (non-query-limit errors)
+            vscode.window.showErrorMessage(`❌ Query execution failed: ${detailedError.summary}`);
             showQueryError(query, detailedError, kustoConnection);
         }
     }
@@ -966,6 +1471,75 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             rawError: error
         };
     }
+    function addTakeClauseToQuery(query, limit) {
+        try {
+            // Clean the query and remove comments
+            const lines = query.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('//'));
+            const cleanQuery = lines.join(' ').trim();
+            // Check if the query already has a take/limit clause
+            const hasTake = /\|\s*take\s+\d+/i.test(cleanQuery) || /\|\s*limit\s+\d+/i.test(cleanQuery);
+            if (hasTake) {
+                console.log('🔄 Query already has take/limit clause, using as-is');
+                return cleanQuery;
+            }
+            // Add take clause at the end
+            return `${cleanQuery} | take ${limit}`;
+        }
+        catch (error) {
+            console.log('🔄 Error adding take clause, using original query:', error);
+            return query;
+        }
+    }
+    function checkForTruncation(response, results) {
+        try {
+            // Check various indicators of truncation in Kusto responses
+            // Check if there are any errors/warnings in the response
+            if (response.errors && response.errors.length > 0) {
+                for (const error of response.errors) {
+                    const errorMsg = error.message || error.toString();
+                    if (errorMsg.includes('64 MB') ||
+                        errorMsg.includes('E_QUERY_RESULT_SET_TOO_LARGE') ||
+                        errorMsg.includes('exceeded the allowed limits') ||
+                        errorMsg.includes('truncated')) {
+                        return { truncated: true, reason: errorMsg };
+                    }
+                }
+            }
+            // Check for warnings
+            if (response.warnings && response.warnings.length > 0) {
+                for (const warning of response.warnings) {
+                    const warningMsg = warning.message || warning.toString();
+                    if (warningMsg.includes('64 MB') ||
+                        warningMsg.includes('truncated') ||
+                        warningMsg.includes('partial')) {
+                        return { truncated: true, reason: warningMsg };
+                    }
+                }
+            }
+            // Check primary results for truncation indicators
+            if (response.primaryResults && response.primaryResults.length > 0) {
+                const primaryTable = response.primaryResults[0];
+                // Check if the table metadata indicates truncation
+                if (primaryTable.tableKind === 'QueryResult' && primaryTable.tableName) {
+                    // Some responses indicate truncation in table properties
+                    if (primaryTable.isTruncated || primaryTable.truncated) {
+                        return { truncated: true, reason: 'Result set was truncated due to size limits' };
+                    }
+                }
+            }
+            // Check for specific row count patterns that might indicate truncation
+            // Kusto sometimes returns exactly certain limits when truncated
+            if (results.rowCount === 500000 || results.rowCount === 1000000) {
+                console.log('🔍 Suspicious row count that might indicate truncation:', results.rowCount);
+                // Don't automatically assume truncation for these counts, but log for investigation
+            }
+            return { truncated: false };
+        }
+        catch (error) {
+            console.error('Error checking for truncation:', error);
+            return { truncated: false };
+        }
+    }
     function processKustoResponse(response, executionTimeMs) {
         try {
             // The Azure Kusto SDK returns a KustoResponseDataSetV2 object
@@ -1053,7 +1627,8 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         panel.webview.html = getResultsWebviewContent(query, results, connection);
     }
     function showQueryError(query, errorDetails, connection) {
-        const panel = vscode.window.createWebviewPanel('kustoError', 'Kusto Query Error', vscode.ViewColumn.Two, {
+        const panel = vscode.window.createWebviewPanel('kustoError', 'Kusto Query Error', vscode.ViewColumn.Three, // Use column 3 to avoid replacing results in column 2
+        {
             enableScripts: true
         });
         panel.webview.html = getErrorWebviewContent(query, errorDetails, connection);
@@ -1090,13 +1665,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     border-radius: 4px;
                     margin-bottom: 15px;
                     font-size: 12px;
-                }
-                .query-info {
-                    background-color: var(--vscode-textCodeBlock-background);
-                    padding: 10px;
-                    border-radius: 4px;
-                    margin-bottom: 15px;
-                    border-left: 3px solid var(--vscode-charts-blue);
                 }
                 .stats {
                     margin-bottom: 20px;
@@ -1186,12 +1754,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                 .warning {
                     color: var(--vscode-charts-orange);
                 }
-                .query-text {
-                    font-family: var(--vscode-editor-font-family);
-                    font-size: 13px;
-                    white-space: pre-wrap;
-                    line-height: 1.4;
-                }
                 .table-container {
                     max-height: 60vh;
                     overflow: auto;
@@ -1203,10 +1765,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             <h2>🔍 Kusto Query Results</h2>
             <div class="connection-info">
                 🔗 Connected to: <strong>${connection.cluster}</strong> / <strong>${connection.database}</strong>
-            </div>
-            <div class="query-info">
-                <strong>📝 Executed Query:</strong><br>
-                <div class="query-text">${query}</div>
             </div>
             <div class="stats">
                 <div class="stat-item">
@@ -1551,6 +2109,14 @@ print "🚀 KustoX is ready! Configure your connection to get started."
         const details = typeof errorDetails === 'string'
             ? { summary: errorDetails, details: errorDetails, category: 'Error', severity: 'Error' }
             : errorDetails;
+        // Check if this is a query limit exceeded error for special formatting
+        const isQueryLimitError = details.summary.includes('E_QUERY_RESULT_SET_TOO_LARGE') ||
+            details.summary.includes('80DA0003') ||
+            details.summary.includes('exceeded the allowed limits') ||
+            details.summary.includes('64 MB');
+        const errorTitle = isQueryLimitError ? '⚠️ Query Result Limit Exceeded' : '❌ Query Execution Error';
+        const errorClass = isQueryLimitError ? 'warning-info' : 'error-info';
+        const errorBorderColor = isQueryLimitError ? 'var(--vscode-notificationWarningIcon-foreground)' : 'var(--vscode-notificationErrorIcon-foreground)';
         const additionalErrorInfo = details.oneApiErrors && details.oneApiErrors.length > 0
             ? details.oneApiErrors.map((error, index) => `
                 <div style="margin-top: 10px; padding: 10px; background: var(--vscode-textCodeBlock-background); border-radius: 4px;">
@@ -1592,13 +2158,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     margin-bottom: 15px;
                     font-size: 12px;
                 }
-                .query-info {
-                    background-color: var(--vscode-textCodeBlock-background);
-                    padding: 15px;
-                    border-radius: 4px;
-                    margin-bottom: 15px;
-                    border-left: 3px solid var(--vscode-charts-blue);
-                }
                 .error-info {
                     background-color: var(--vscode-inputValidation-errorBackground);
                     color: var(--vscode-inputValidation-errorForeground);
@@ -1622,17 +2181,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
                     font-size: 13px;
                     border: 1px solid rgba(255, 0, 0, 0.3);
                 }
-                .query-text {
-                    font-family: var(--vscode-editor-font-family);
-                    font-size: 13px;
-                    white-space: pre-wrap;
-                    line-height: 1.4;
-                    background-color: var(--vscode-editor-background);
-                    padding: 10px;
-                    border-radius: 4px;
-                    border: 1px solid var(--vscode-widget-border);
-                    margin-top: 8px;
-                }
                 .help-section {
                     background-color: var(--vscode-textCodeBlock-background);
                     padding: 15px;
@@ -1655,11 +2203,6 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             
             <div class="connection-info">
                 🔗 Connected to: <strong>${connection.cluster}</strong> / <strong>${connection.database}</strong>
-            </div>
-            
-            <div class="query-info">
-                <strong>📝 Failed Query:</strong>
-                <div class="query-text">${query}</div>
             </div>
             
             <div class="error-info">
@@ -1760,7 +2303,7 @@ print "🚀 KustoX is ready! Configure your connection to get started."
             vscode.window.showInformationMessage(`Table cache refreshed for ${item.item.database}`);
         }
     });
-    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnection, executeQuery, disconnectKusto, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand);
+    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnection, executeQuery, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand);
     // Register integration tests
     (0, integrationTests_1.registerIntegrationTests)(context);
     // Register comprehensive tests
@@ -1771,6 +2314,9 @@ print "🚀 KustoX is ready! Configure your connection to get started."
 exports.activate = activate;
 function deactivate() {
     kustoConnection = null;
+    if (connectionStatusBarItem) {
+        connectionStatusBarItem.dispose();
+    }
     console.log('KustoX extension is now deactivated!');
 }
 exports.deactivate = deactivate;
