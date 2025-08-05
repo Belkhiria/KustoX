@@ -52,14 +52,23 @@ class QueryExecutor {
         const queries = [];
         // First, clean the query text
         const cleanedText = this.cleanQuery(queryText);
+        // Check if this looks like multiple queries by looking for "; followed by non-whitespace"
+        // or "| as SomeName;" patterns
+        const hasMultipleQueries = /;\s*\w/.test(cleanedText) || /\|\s*as\s+\w+\s*;/.test(cleanedText);
+        if (!hasMultipleQueries) {
+            // Single query - return as is
+            return [{
+                    query: cleanedText
+                }];
+        }
         // Split by semicolon that's not inside quotes
         const parts = this.splitQueriesBySemicolon(cleanedText);
         for (let part of parts) {
             part = part.trim();
             if (!part)
                 continue;
-            // Check if query ends with "| as QueryName;"
-            const asMatch = part.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?\s*$/is);
+            // Check if query ends with "| as QueryName"
+            const asMatch = part.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*$/is);
             if (asMatch) {
                 queries.push({
                     query: asMatch[1].trim(),

@@ -32,6 +32,17 @@ export class QueryExecutor {
         // First, clean the query text
         const cleanedText = this.cleanQuery(queryText);
         
+        // Check if this looks like multiple queries by looking for "; followed by non-whitespace"
+        // or "| as SomeName;" patterns
+        const hasMultipleQueries = /;\s*\w/.test(cleanedText) || /\|\s*as\s+\w+\s*;/.test(cleanedText);
+        
+        if (!hasMultipleQueries) {
+            // Single query - return as is
+            return [{
+                query: cleanedText
+            }];
+        }
+        
         // Split by semicolon that's not inside quotes
         const parts = this.splitQueriesBySemicolon(cleanedText);
         
@@ -39,8 +50,8 @@ export class QueryExecutor {
             part = part.trim();
             if (!part) continue;
             
-            // Check if query ends with "| as QueryName;"
-            const asMatch = part.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?\s*$/is);
+            // Check if query ends with "| as QueryName"
+            const asMatch = part.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*$/is);
             if (asMatch) {
                 queries.push({
                     query: asMatch[1].trim(),
@@ -153,14 +164,25 @@ export class QueryExecutor {
 
         console.log(`Found ${parsedQueries.length} queries to execute:`, parsedQueries.map(q => ({ name: q.name, queryLength: q.query.length })));
 
+        // Debug: Log the detection logic
+        const cleanedText = this.cleanQuery(query);
+        const hasMultipleQueriesPattern1 = /;\s*\w/.test(cleanedText);
+        const hasMultipleQueriesPattern2 = /\|\s*as\s+\w+\s*;/.test(cleanedText);
+        console.log('🔍 Multiple query detection:');
+        console.log('  Pattern 1 ("; followed by word"):', hasMultipleQueriesPattern1);
+        console.log('  Pattern 2 ("| as Name;"):', hasMultipleQueriesPattern2);
+        console.log('  Treating as multiple queries:', hasMultipleQueriesPattern1 || hasMultipleQueriesPattern2);
+
         // If only one query, execute it normally
         if (parsedQueries.length === 1) {
+            console.log('📄 Executing single query');
             const queryToExecute = parsedQueries[0].query;
             await this.executeSingleQuery(queryToExecute, parsedQueries[0].name);
             return;
         }
 
-        // Multiple queries - execute them in parallel and show in tabbed view
+        // Multiple queries - execute them sequentially and show in separate tabs
+        console.log('📄 Executing multiple queries');
         await this.executeMultipleQueries(parsedQueries);
     }
 

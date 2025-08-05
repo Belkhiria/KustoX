@@ -1,0 +1,4 @@
+// Simple single query test
+print "Hello from KustoX!"
+| extend CurrentTime = now()
+| project Message = "Hello from KustoX!", CurrentTime
