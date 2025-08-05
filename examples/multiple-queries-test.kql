@@ -1,0 +1,22 @@
+// Example of multiple queries with aliases - similar to your use case
+let myAppName = 'e23bba2a1277';
+let myStartTime = datetime(2025-07-28 19:30);
+let myEndTime = datetime(2025-07-28 20:40);
+
+// Query 1: Find dump files for the app
+print "Searching for dump files..."
+| extend AppName = myAppName, StartTime = myStartTime, EndTime = myEndTime
+| project AppName, StartTime, EndTime, Message = "This is a demo query for dumps"
+| as Dumps;
+
+// Query 2: Find engine restart events  
+print "Searching for engine restarts..."
+| extend AppName = myAppName, StartTime = myStartTime, EndTime = myEndTime
+| project AppName, StartTime, EndTime, Message = "This is a demo query for engine restarts"
+| as EngineRestart;
+
+// Query 3: Find DMS service restarts
+print "Searching for DMS restarts..."
+| extend AppName = myAppName, StartTime = myStartTime, EndTime = myEndTime
+| project AppName, StartTime, EndTime, Message = "This is a demo query for DMS restarts"
+| as DMSRestart;

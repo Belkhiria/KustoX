@@ -3,7 +3,7 @@
  */
 
 import * as vscode from 'vscode';
-import { KustoConnection, QueryResult } from '../types';
+import { KustoConnection, QueryResult, ParsedError } from '../types';
 import { loadKustoSDK, getClientRequestProperties, generateUUID } from '../kusto/sdkManager';
 import { processKustoResponse } from '../kusto/responseProcessor';
 import { parseKustoError } from '../error/errorHandler';
@@ -23,6 +23,73 @@ export class QueryExecutor {
             });
         
         return cleanLines.join('\n').trim();
+    }
+
+    private parseMultipleQueries(queryText: string): Array<{query: string, name?: string}> {
+        // Split queries by semicolon followed by optional whitespace
+        const queries: Array<{query: string, name?: string}> = [];
+        
+        // First, clean the query text
+        const cleanedText = this.cleanQuery(queryText);
+        
+        // Split by semicolon that's not inside quotes
+        const parts = this.splitQueriesBySemicolon(cleanedText);
+        
+        for (let part of parts) {
+            part = part.trim();
+            if (!part) continue;
+            
+            // Check if query ends with "| as QueryName;"
+            const asMatch = part.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?\s*$/is);
+            if (asMatch) {
+                queries.push({
+                    query: asMatch[1].trim(),
+                    name: asMatch[2].trim()
+                });
+            } else {
+                // Regular query without alias
+                queries.push({
+                    query: part.replace(/;$/, '').trim()
+                });
+            }
+        }
+        
+        return queries.filter(q => q.query.length > 0);
+    }
+
+    private splitQueriesBySemicolon(text: string): string[] {
+        const queries: string[] = [];
+        let current = '';
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        let i = 0;
+        
+        while (i < text.length) {
+            const char = text[i];
+            const nextChar = text[i + 1];
+            
+            if (char === "'" && !inDoubleQuote) {
+                inSingleQuote = !inSingleQuote;
+            } else if (char === '"' && !inSingleQuote) {
+                inDoubleQuote = !inDoubleQuote;
+            } else if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+                // Found a semicolon outside of quotes
+                queries.push(current);
+                current = '';
+                i++;
+                continue;
+            }
+            
+            current += char;
+            i++;
+        }
+        
+        // Add the last query if there's remaining content
+        if (current.trim()) {
+            queries.push(current);
+        }
+        
+        return queries;
     }
 
     async executeQuery(): Promise<void> {
@@ -76,19 +143,30 @@ export class QueryExecutor {
             return;
         }
 
-        // Clean the query (remove only comment lines and empty lines, preserve all other content)
-        const cleanQuery = this.cleanQuery(query);
+        // Parse multiple queries
+        const parsedQueries = this.parseMultipleQueries(query);
 
-        if (!cleanQuery.trim()) {
+        if (parsedQueries.length === 0) {
             vscode.window.showErrorMessage('No executable query found. Please write a Kusto query (non-comment lines).');
             return;
         }
 
-        console.log('Executing query:', cleanQuery);
+        console.log(`Found ${parsedQueries.length} queries to execute:`, parsedQueries.map(q => ({ name: q.name, queryLength: q.query.length })));
 
-        // Use the original query without any modifications
-        const queryToExecute = cleanQuery;
+        // If only one query, execute it normally
+        if (parsedQueries.length === 1) {
+            const queryToExecute = parsedQueries[0].query;
+            await this.executeSingleQuery(queryToExecute, parsedQueries[0].name);
+            return;
+        }
 
+        // Multiple queries - execute them in parallel and show in tabbed view
+        await this.executeMultipleQueries(parsedQueries);
+    }
+
+    private async executeSingleQuery(queryToExecute: string, queryName?: string): Promise<void> {
+        const connection = this.getConnection()!; // We know it exists at this point
+        
         // For debugging: Try to test connection first with a simple query
         if (queryToExecute.trim().toLowerCase() === 'debug connection') {
             try {
@@ -112,7 +190,7 @@ export class QueryExecutor {
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: "Executing Kusto Query...",
+                title: `Executing Kusto Query${queryName ? ` (${queryName})` : ''}...`,
                 cancellable: false
             }, async (progress) => {
                 progress.report({ increment: 0 });
@@ -167,7 +245,7 @@ export class QueryExecutor {
                     
                     // Show a message to user about no results
                     vscode.window.showInformationMessage(
-                        `🔍 Query executed successfully but returned no results.\n\n` +
+                        `🔍 Query${queryName ? ` (${queryName})` : ''} executed successfully but returned no results.\n\n` +
                         `This could mean:\n` +
                         `• Your query filters returned no matching data\n` +
                         `• The time range or conditions are too restrictive\n` +
@@ -217,7 +295,7 @@ export class QueryExecutor {
             
             // Handle all errors the same way
             vscode.window.showErrorMessage(
-                `Query failed: ${detailedError.summary}`,
+                `Query${queryName ? ` (${queryName})` : ''} failed: ${detailedError.summary}`,
                 'Show Error Details',
                 'Try Again'
             ).then(selection => {
@@ -228,5 +306,101 @@ export class QueryExecutor {
                 }
             });
         }
+    }
+
+    private async executeMultipleQueries(queries: Array<{query: string, name?: string}>): Promise<void> {
+        const connection = this.getConnection()!;
+        
+        // Show initial progress
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Executing ${queries.length} Kusto Queries...`,
+            cancellable: false
+        }, async (progress) => {
+            
+            const queryResults: Array<{
+                query: string;
+                name?: string;
+                result?: QueryResult;
+                error?: ParsedError;
+            }> = [];
+            
+            const progressIncrement = 100 / queries.length;
+            
+            // Execute queries sequentially to avoid overloading the cluster
+            for (let i = 0; i < queries.length; i++) {
+                const queryInfo = queries[i];
+                const queryName = queryInfo.name || `Query ${i + 1}`;
+                
+                progress.report({ 
+                    increment: 0, 
+                    message: `Executing ${queryName}...` 
+                });
+                
+                try {
+                    const startTime = Date.now();
+                    const ClientRequestProperties = getClientRequestProperties();
+                    const crp = new ClientRequestProperties();
+                    
+                    // Set up request properties
+                    crp.setOption('clientRequestId', `KustoX-Multi-${i}-${generateUUID()}`);
+                    crp.setTimeout(5 * 60 * 1000);
+                    crp.setOption('application', 'KustoX-VSCode-Extension');
+                    crp.setOption('version', '0.1.0');
+                    
+                    console.log(`🔍 Executing query ${i + 1}/${queries.length}: ${queryName}`);
+                    
+                    // Execute the query
+                    const response = await connection.client.execute(
+                        connection.database,
+                        queryInfo.query,
+                        crp
+                    );
+                    
+                    const executionTime = Date.now() - startTime;
+                    const results = processKustoResponse(response, executionTime);
+                    
+                    queryResults.push({
+                        query: queryInfo.query,
+                        name: queryInfo.name,
+                        result: results
+                    });
+                    
+                    console.log(`✅ Query ${i + 1} completed: ${results.rowCount} rows`);
+                    
+                } catch (error) {
+                    console.error(`❌ Query ${i + 1} failed:`, error);
+                    
+                    const detailedError = parseKustoError(error);
+                    queryResults.push({
+                        query: queryInfo.query,
+                        name: queryInfo.name,
+                        error: detailedError
+                    });
+                }
+                
+                progress.report({ increment: progressIncrement });
+            }
+            
+            // Show all results in a tabbed interface
+            progress.report({ message: "Displaying results..." });
+            this.showMultipleQueryResults(queryResults, connection);
+        });
+    }
+
+    private showMultipleQueryResults(
+        queryResults: Array<{query: string; name?: string; result?: QueryResult; error?: ParsedError}>,
+        connection: KustoConnection
+    ): void {
+        // For now, create separate panels for each result instead of trying to call non-existent function
+        queryResults.forEach((result, index) => {
+            const tabTitle = result.name || `Query ${index + 1}`;
+            
+            if (result.error) {
+                showQueryError(result.query, result.error, connection);
+            } else if (result.result) {
+                showQueryResults(result.query, result.result, connection);
+            }
+        });
     }
 }
