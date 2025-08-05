@@ -1,0 +1,4 @@
+// Test query with let variable - should be treated as single query
+let x = 10;
+MonLogin
+| take x

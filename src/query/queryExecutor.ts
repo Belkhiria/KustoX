@@ -26,79 +26,241 @@ export class QueryExecutor {
     }
 
     private parseMultipleQueries(queryText: string): Array<{query: string, name?: string}> {
-        // Split queries by semicolon followed by optional whitespace
-        const queries: Array<{query: string, name?: string}> = [];
-        
         // First, clean the query text
         const cleanedText = this.cleanQuery(queryText);
         
-        // Check if this looks like multiple queries by looking for "; followed by non-whitespace"
-        // or "| as SomeName;" patterns
-        const hasMultipleQueries = /;\s*\w/.test(cleanedText) || /\|\s*as\s+\w+\s*;/.test(cleanedText);
+        console.log('🔍 Original query text:', queryText);
+        console.log('🔍 Cleaned query text:', cleanedText);
+        
+        // More sophisticated detection for multiple queries
+        // We need to distinguish between:
+        // 1. Semicolons that are part of Kusto syntax (like after 'let' statements)
+        // 2. Semicolons that actually separate different queries
+        
+        // Check for "| as QueryName;" pattern (this is a clear multiple query indicator)
+        const hasAsQueryPattern = /\|\s*as\s+\w+\s*;/.test(cleanedText);
+        
+        // Check for semicolons that might separate queries, but exclude common Kusto syntax
+        // We need to be very careful here - only detect true query separators
+        // Look for patterns that indicate genuinely separate queries, not internal Kusto syntax
+        
+        // Pattern: semicolon followed by newline and a table name that's NOT preceded by 'let'
+        // This excludes "let x = 10;\nTableName" but catches "Query1;\nTableName"
+        const lines = cleanedText.split('\n');
+        let hasSemicolonSeparatedQueries = false;
+        
+        for (let i = 0; i < lines.length - 1; i++) {
+            const currentLine = lines[i].trim();
+            const nextLine = lines[i + 1].trim();
+            
+            // Check if current line ends with semicolon
+            if (currentLine.endsWith(';')) {
+                // Check if the line with semicolon is NOT a 'let' statement
+                const isLetStatement = /^\s*let\s+\w+\s*=/.test(currentLine);
+                
+                // Check if next line starts with what looks like a new query
+                const nextLineStartsQuery = /^\w+\s*(\||$)/.test(nextLine) || /^print\s+/.test(nextLine);
+                
+                if (!isLetStatement && nextLineStartsQuery) {
+                    hasSemicolonSeparatedQueries = true;
+                    break;
+                }
+            }
+        }
+        
+        const hasMultipleQueries = hasAsQueryPattern || hasSemicolonSeparatedQueries;
+        
+        console.log('🔍 Multiple query detection patterns:');
+        console.log('  Pattern 1 ("| as Name;"):', hasAsQueryPattern);
+        console.log('  Pattern 2 (semicolon separated queries):', hasSemicolonSeparatedQueries);
+        console.log('  Treating as multiple queries:', hasMultipleQueries);
         
         if (!hasMultipleQueries) {
             // Single query - return as is
+            console.log('📄 Detected as single query, returning as-is');
             return [{
                 query: cleanedText
             }];
         }
         
-        // Split by semicolon that's not inside quotes
+        // Multiple queries detected - split by semicolon that's not inside quotes
+        console.log('📄 Detected as multiple queries, splitting...');
         const parts = this.splitQueriesBySemicolon(cleanedText);
+        console.log('🔍 Split into', parts.length, 'parts');
         
-        for (let part of parts) {
-            part = part.trim();
+        const queries: Array<{query: string, name?: string}> = [];
+        
+        // In Kusto multiple query syntax, let statements at the beginning are shared
+        // We need to identify let statements and prepend them to each actual query
+        let letStatements = '';
+        let actualQueries: string[] = [];
+        
+        console.log('🔍 Processing each part to identify let statements vs actual queries...');
+        
+        for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+            let part = parts[partIndex].trim();
             if (!part) continue;
             
+            console.log(`🔍 Processing part ${partIndex + 1}:`);
+            console.log('─'.repeat(40));
+            console.log(part);
+            console.log('─'.repeat(40));
+            
+            // Check if this part contains only let statements
+            const lines = part.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const isOnlyLetStatements = lines.every(line => 
+                line.startsWith('let ') || 
+                line.startsWith('//') ||
+                line === '' ||
+                line.endsWith(';') && line.indexOf('|') === -1 && line.indexOf('print') === -1
+            );
+            
+            console.log(`🔍 Part ${partIndex + 1} analysis:`);
+            console.log(`  Lines: ${lines.length}`);
+            console.log(`  Lines content: ${JSON.stringify(lines)}`);
+            console.log(`  Is only let statements: ${isOnlyLetStatements}`);
+            
+            if (isOnlyLetStatements) {
+                // This part contains only let statements - save them to prepend to actual queries
+                letStatements = part;
+                console.log('🔧 Found let statements part:', letStatements);
+            } else {
+                // This is an actual query
+                console.log('🔧 Found actual query part');
+                actualQueries.push(part);
+            }
+        }
+        
+        console.log('🔍 Final categorization:');
+        console.log(`  Let statements: "${letStatements}"`);
+        console.log(`  Actual queries: ${actualQueries.length} queries`);
+        actualQueries.forEach((query, index) => {
+            console.log(`    Query ${index + 1}: "${query.substring(0, 50)}..."`);
+        });
+        
+        // Process each actual query
+        for (let queryPart of actualQueries) {
+            queryPart = queryPart.trim();
+            if (!queryPart) continue;
+            
             // Check if query ends with "| as QueryName"
-            const asMatch = part.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*$/is);
+            const asMatch = queryPart.match(/^(.*?)\|\s*as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;?\s*$/is);
             if (asMatch) {
+                // Extract the actual query (without the "| as QueryName" part)
+                const actualQuery = asMatch[1].trim();
+                const queryName = asMatch[2].trim();
+                const fullQuery = letStatements ? (letStatements + '\n\n' + actualQuery) : actualQuery;
                 queries.push({
-                    query: asMatch[1].trim(),
-                    name: asMatch[2].trim()
+                    query: fullQuery,
+                    name: queryName
                 });
+                console.log(`🔧 Extracted query "${queryName}" without "| as" syntax`);
             } else {
                 // Regular query without alias
+                const cleanQuery = queryPart.replace(/;$/, '').trim();
+                const fullQuery = letStatements ? (letStatements + '\n\n' + cleanQuery) : cleanQuery;
                 queries.push({
-                    query: part.replace(/;$/, '').trim()
+                    query: fullQuery
                 });
             }
         }
         
-        return queries.filter(q => q.query.length > 0);
+        const filteredQueries = queries.filter(q => q.query.length > 0);
+        console.log('🔍 Final parsed queries:', filteredQueries.map(q => ({ name: q.name, queryLength: q.query.length, preview: q.query.substring(0, 50) + '...' })));
+        
+        return filteredQueries;
     }
 
     private splitQueriesBySemicolon(text: string): string[] {
+        console.log('🔧 splitQueriesBySemicolon called with text:');
+        console.log('─'.repeat(80));
+        console.log(text);
+        console.log('─'.repeat(80));
+        
+        // For Kusto multiple query syntax, we need to be smarter about splitting
+        // We should only split on semicolons that are actual query separators,
+        // not on semicolons that are part of let statements or other Kusto syntax
+        
         const queries: string[] = [];
         let current = '';
         let inSingleQuote = false;
         let inDoubleQuote = false;
         let i = 0;
         
+        console.log('🔍 Starting character-by-character parsing...');
+        
         while (i < text.length) {
             const char = text[i];
-            const nextChar = text[i + 1];
+            
+            // Debug quote state changes
+            const wasInSingleQuote = inSingleQuote;
+            const wasInDoubleQuote = inDoubleQuote;
             
             if (char === "'" && !inDoubleQuote) {
                 inSingleQuote = !inSingleQuote;
+                console.log(`🔍 Position ${i}: Found single quote '${char}' - single quote state: ${wasInSingleQuote} → ${inSingleQuote}`);
+                current += char; // Add the quote to the current string
             } else if (char === '"' && !inSingleQuote) {
                 inDoubleQuote = !inDoubleQuote;
+                console.log(`🔍 Position ${i}: Found double quote '${char}' - double quote state: ${wasInDoubleQuote} → ${inDoubleQuote}`);
+                current += char; // Add the quote to the current string
             } else if (char === ';' && !inSingleQuote && !inDoubleQuote) {
-                // Found a semicolon outside of quotes
-                queries.push(current);
-                current = '';
-                i++;
-                continue;
+                // Found a semicolon outside of quotes - but we need to check if it's a query separator
+                console.log(`🔍 Position ${i}: Found semicolon outside quotes - checking if it's a query separator`);
+                
+                // Look ahead to see what comes after this semicolon
+                let nextNonWhitespaceIndex = i + 1;
+                while (nextNonWhitespaceIndex < text.length && /\s/.test(text[nextNonWhitespaceIndex])) {
+                    nextNonWhitespaceIndex++;
+                }
+                
+                const remainingText = text.substring(nextNonWhitespaceIndex);
+                console.log(`🔍 Text after semicolon: "${remainingText.substring(0, 50)}..."`);
+                
+                // Check if this semicolon is followed by a new query (not a let statement)
+                // A new query typically starts with a table name or 'print', not 'let'
+                const isQuerySeparator = /^((?!let\s)\w+\s*\||\w+\s*$|print\s)/i.test(remainingText);
+                
+                console.log(`🔍 Is query separator: ${isQuerySeparator}`);
+                
+                if (isQuerySeparator) {
+                    // This is a genuine query separator
+                    const currentQuery = current + char;
+                    console.log(`✂️ SPLITTING: Adding query part: "${currentQuery.substring(0, 100)}${currentQuery.length > 100 ? '...' : ''}"`);
+                    queries.push(currentQuery); // Include the semicolon in the query
+                    current = '';
+                    i++;
+                    continue;
+                } else {
+                    // This is just a semicolon in Kusto syntax (like after a let statement)
+                    // Include it in the current query and continue
+                    console.log(`🔍 Not a query separator - including semicolon in current query`);
+                    current += char;
+                }
+            } else {
+                // Regular character - just add to current
+                if (char === ';') {
+                    console.log(`🔍 Position ${i}: Semicolon inside quotes (single: ${inSingleQuote}, double: ${inDoubleQuote}) - NOT splitting`);
+                }
+                current += char;
             }
             
-            current += char;
             i++;
         }
         
         // Add the last query if there's remaining content
         if (current.trim()) {
+            console.log(`📝 Adding final query part: "${current.substring(0, 100)}${current.length > 100 ? '...' : ''}"`);
             queries.push(current);
         }
+        
+        console.log('🔧 splitQueriesBySemicolon result - found', queries.length, 'parts:');
+        queries.forEach((query, index) => {
+            console.log(`📋 Part ${index + 1}:`);
+            console.log('─'.repeat(60));
+            console.log(query);
+            console.log('─'.repeat(60));
+        });
         
         return queries;
     }
@@ -163,15 +325,14 @@ export class QueryExecutor {
         }
 
         console.log(`Found ${parsedQueries.length} queries to execute:`, parsedQueries.map(q => ({ name: q.name, queryLength: q.query.length })));
-
-        // Debug: Log the detection logic
-        const cleanedText = this.cleanQuery(query);
-        const hasMultipleQueriesPattern1 = /;\s*\w/.test(cleanedText);
-        const hasMultipleQueriesPattern2 = /\|\s*as\s+\w+\s*;/.test(cleanedText);
-        console.log('🔍 Multiple query detection:');
-        console.log('  Pattern 1 ("; followed by word"):', hasMultipleQueriesPattern1);
-        console.log('  Pattern 2 ("| as Name;"):', hasMultipleQueriesPattern2);
-        console.log('  Treating as multiple queries:', hasMultipleQueriesPattern1 || hasMultipleQueriesPattern2);
+        
+        // Debug: Log each parsed query in detail
+        parsedQueries.forEach((q, i) => {
+            console.log(`\n🔍 PARSED QUERY ${i + 1} (Name: ${q.name || 'Unnamed'}):`);
+            console.log('─'.repeat(50));
+            console.log(q.query);
+            console.log('─'.repeat(50));
+        });
 
         // If only one query, execute it normally
         if (parsedQueries.length === 1) {
@@ -221,9 +382,6 @@ export class QueryExecutor {
                 // Set a custom client request identifier
                 crp.setOption('clientRequestId', `KustoX-${generateUUID()}`);
                 
-                // Set the query timeout to 5 minutes
-                crp.setTimeout(5 * 60 * 1000);
-                
                 // Add application context
                 crp.setOption('application', 'KustoX-VSCode-Extension');
                 crp.setOption('version', '0.1.0');
@@ -235,9 +393,11 @@ export class QueryExecutor {
                 console.log('  Cluster:', connection.cluster);
                 console.log('  Database:', connection.database);
                 console.log('  Query length:', queryToExecute.length);
-                console.log('  Query preview:', queryToExecute.substring(0, 200) + (queryToExecute.length > 200 ? '...' : ''));
                 console.log('  Client request ID:', crp.getOption('clientRequestId'));
-                console.log('  Timeout:', crp.getTimeout());
+                console.log('🔍 FULL QUERY BEING SENT TO KUSTO:');
+                console.log('─'.repeat(60));
+                console.log(queryToExecute);
+                console.log('─'.repeat(60));
 
                 // Execute query with client request properties
                 const response = await connection.client.execute(
@@ -366,11 +526,14 @@ export class QueryExecutor {
                     
                     // Set up request properties
                     crp.setOption('clientRequestId', `KustoX-Multi-${i}-${generateUUID()}`);
-                    crp.setTimeout(5 * 60 * 1000);
                     crp.setOption('application', 'KustoX-VSCode-Extension');
                     crp.setOption('version', '0.1.0');
                     
                     console.log(`🔍 Executing query ${i + 1}/${queries.length}: ${queryName}`);
+                    console.log('🔍 FULL QUERY BEING SENT TO KUSTO:');
+                    console.log('─'.repeat(60));
+                    console.log(queryInfo.query);
+                    console.log('─'.repeat(60));
                     
                     // Execute the query
                     const response = await connection.client.execute(
