@@ -91,18 +91,6 @@
         "icon": "$(disconnect)"
       },
       {
-        "command": "kustox.runIntegrationTests",
-        "title": "Run Integration Tests",
-        "category": "KustoX",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "kustox.runComprehensiveTests",
-        "title": "Run Comprehensive Tests",
-        "category": "KustoX",
-        "icon": "$(checklist)"
-      },
-      {
         "command": "kustox.addCluster",
         "title": "Add Cluster",
         "category": "KustoX",
@@ -153,7 +141,7 @@
       {
         "command": "kustox.copyResults",
         "title": "Copy Results",
-        "category": "KustoX", 
+        "category": "KustoX",
         "icon": "$(copy)"
       },
       {
@@ -190,13 +178,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "kustox.addCluster", 
+          "command": "kustox.addCluster",
           "when": "resourceExtname == .kql || resourceExtname == .kusto",
           "group": "navigation@2"
         },
         {
           "command": "kustox.showConnectionStatus",
-          "when": "resourceExtname == .kql || resourceExtname == .kusto", 
+          "when": "resourceExtname == .kql || resourceExtname == .kusto",
           "group": "navigation@3"
         }
       ],
@@ -252,7 +240,6 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "test": "node ./out/test/runTest.js",
     "package": "vsce package"
   },
   "devDependencies": {
@@ -261,7 +248,6 @@
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
-    "@vscode/test-electron": "^2.2.0",
     "@vscode/vsce": "^2.15.0",
     "eslint": "^8.28.0",
     "typescript": "^4.9.4"
@@ -269,8 +255,9 @@
   "dependencies": {
     "@azure/identity": "^4.10.2",
     "@azure/msal-node": "^3.6.4",
-    "azure-kusto-data": "^7.0.1",
-    "azure-kusto-ingest": "^7.0.1",
+    "@types/azure-kusto-data": "^0.2.2",
+    "azure-kusto-data": "^5.2.3",
+    "azure-kusto-ingest": "^5.2.3",
     "uuid": "^11.1.0"
   }
 }
