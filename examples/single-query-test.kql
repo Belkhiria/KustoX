@@ -1,4 +1,17 @@
-// Simple single query test
+// Examples of single queries - tab names will be extracted from first table
+
+// Example 1: Regular table query - tab should be named "MonSqlDumperActivity"
+MonSqlDumperActivity
+| where TIMESTAMP > ago(1d)
+| take 10
+
+// Example 2: Query with let statement - tab should be named "MonDwEngineLogs"
+let appName = 'test123';
+MonDwEngineLogs
+| where AppName has appName
+| take 5
+
+// Example 3: Print statement - tab should be named "print"
 print "Hello from KustoX!"
 | extend CurrentTime = now()
 | project Message = "Hello from KustoX!", CurrentTime

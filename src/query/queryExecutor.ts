@@ -25,6 +25,45 @@ export class QueryExecutor {
         return cleanLines.join('\n').trim();
     }
 
+    private extractTableName(query: string): string | undefined {
+        // Extract the first table name from a Kusto query
+        // This handles queries that start with a table name, after let statements, or after comments
+        
+        const lines = query.split('\n');
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            // Skip empty lines and comments
+            if (!trimmedLine || trimmedLine.startsWith('//')) {
+                continue;
+            }
+            
+            // Skip let statements
+            if (trimmedLine.startsWith('let ')) {
+                continue;
+            }
+            
+            // Look for table name patterns
+            // Pattern 1: Line starts with a table name (most common)
+            const tableMatch = trimmedLine.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*(\||$)/);
+            if (tableMatch) {
+                return tableMatch[1];
+            }
+            
+            // Pattern 2: print statement
+            if (trimmedLine.startsWith('print ')) {
+                return 'print';
+            }
+            
+            // If we hit a line that doesn't match these patterns, 
+            // it might be a more complex query structure, so stop looking
+            break;
+        }
+        
+        return undefined;
+    }
+
     private parseMultipleQueries(queryText: string): Array<{query: string, name?: string}> {
         // First, clean the query text
         const cleanedText = this.cleanQuery(queryText);
@@ -338,7 +377,16 @@ export class QueryExecutor {
         if (parsedQueries.length === 1) {
             console.log('📄 Executing single query');
             const queryToExecute = parsedQueries[0].query;
-            await this.executeSingleQuery(queryToExecute, parsedQueries[0].name);
+            
+            // For single queries, use the first table name as the tab title if no explicit name is provided
+            let queryTitle = parsedQueries[0].name;
+            if (!queryTitle) {
+                const tableName = this.extractTableName(queryToExecute);
+                queryTitle = tableName;
+                console.log(`🔍 Extracted table name for single query: ${tableName}`);
+            }
+            
+            await this.executeSingleQuery(queryToExecute, queryTitle);
             return;
         }
 
@@ -436,14 +484,14 @@ export class QueryExecutor {
                         'Review Query'
                     ).then(choice => {
                         if (choice === 'Show Empty Result View') {
-                            showQueryResults(queryToExecute, results, connection);
+                            showQueryResults(queryToExecute, results, connection, queryName);
                         }
                     });
                     return;
                 }
                 
                 // Show the results
-                showQueryResults(queryToExecute, results, connection);
+                showQueryResults(queryToExecute, results, connection, queryName);
 
                 progress.report({ increment: 100, message: "Query completed!" });
             });
@@ -482,7 +530,7 @@ export class QueryExecutor {
                 'Try Again'
             ).then(selection => {
                 if (selection === 'Show Error Details') {
-                    showQueryError(queryToExecute, detailedError, connection);
+                    showQueryError(queryToExecute, detailedError, connection, queryName);
                 } else if (selection === 'Try Again') {
                     this.executeQuery();
                 }
