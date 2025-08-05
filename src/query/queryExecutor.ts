@@ -577,14 +577,14 @@ export class QueryExecutor {
         queryResults: Array<{query: string; name?: string; result?: QueryResult; error?: ParsedError}>,
         connection: KustoConnection
     ): void {
-        // For now, create separate panels for each result instead of trying to call non-existent function
+        // For multiple queries, create separate panels with custom titles for each result
         queryResults.forEach((result, index) => {
             const tabTitle = result.name || `Query ${index + 1}`;
             
             if (result.error) {
-                showQueryError(result.query, result.error, connection);
+                showQueryError(result.query, result.error, connection, tabTitle);
             } else if (result.result) {
-                showQueryResults(result.query, result.result, connection);
+                showQueryResults(result.query, result.result, connection, tabTitle);
             }
         });
     }

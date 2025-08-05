@@ -6,11 +6,12 @@ import * as vscode from 'vscode';
 import { KustoConnection, QueryResult, ParsedError } from '../types';
 import { prepareChartData, generateChartScript, getChartTitle } from '../visualization/chartUtils';
 
-export function showQueryResults(query: string, results: QueryResult, connection: KustoConnection) {
+export function showQueryResults(query: string, results: QueryResult, connection: KustoConnection, title?: string) {
     // Create and show a new webview panel for results
+    const panelTitle = title || 'Kusto Query Results';
     const panel = vscode.window.createWebviewPanel(
         'kustoResults',
-        'Kusto Query Results',
+        panelTitle,
         vscode.ViewColumn.Two,
         {
             enableScripts: true
@@ -20,10 +21,11 @@ export function showQueryResults(query: string, results: QueryResult, connection
     panel.webview.html = getResultsWebviewContent(query, results, connection);
 }
 
-export function showQueryError(query: string, errorDetails: ParsedError, connection: KustoConnection) {
+export function showQueryError(query: string, errorDetails: ParsedError, connection: KustoConnection, title?: string) {
+    const panelTitle = title ? `${title} - Error` : 'Kusto Query Error';
     const panel = vscode.window.createWebviewPanel(
         'kustoError',
-        'Kusto Query Error',
+        panelTitle,
         vscode.ViewColumn.Three, // Use column 3 to avoid replacing results in column 2
         {
             enableScripts: true

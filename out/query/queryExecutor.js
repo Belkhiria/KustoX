@@ -487,14 +487,14 @@ class QueryExecutor {
         });
     }
     showMultipleQueryResults(queryResults, connection) {
-        // For now, create separate panels for each result instead of trying to call non-existent function
+        // For multiple queries, create separate panels with custom titles for each result
         queryResults.forEach((result, index) => {
             const tabTitle = result.name || `Query ${index + 1}`;
             if (result.error) {
-                (0, webviewManager_1.showQueryError)(result.query, result.error, connection);
+                (0, webviewManager_1.showQueryError)(result.query, result.error, connection, tabTitle);
             }
             else if (result.result) {
-                (0, webviewManager_1.showQueryResults)(result.query, result.result, connection);
+                (0, webviewManager_1.showQueryResults)(result.query, result.result, connection, tabTitle);
             }
         });
     }

@@ -29,16 +29,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.showQueryError = exports.showQueryResults = void 0;
 const vscode = __importStar(require("vscode"));
 const chartUtils_1 = require("../visualization/chartUtils");
-function showQueryResults(query, results, connection) {
+function showQueryResults(query, results, connection, title) {
     // Create and show a new webview panel for results
-    const panel = vscode.window.createWebviewPanel('kustoResults', 'Kusto Query Results', vscode.ViewColumn.Two, {
+    const panelTitle = title || 'Kusto Query Results';
+    const panel = vscode.window.createWebviewPanel('kustoResults', panelTitle, vscode.ViewColumn.Two, {
         enableScripts: true
     });
     panel.webview.html = getResultsWebviewContent(query, results, connection);
 }
 exports.showQueryResults = showQueryResults;
-function showQueryError(query, errorDetails, connection) {
-    const panel = vscode.window.createWebviewPanel('kustoError', 'Kusto Query Error', vscode.ViewColumn.Three, // Use column 3 to avoid replacing results in column 2
+function showQueryError(query, errorDetails, connection, title) {
+    const panelTitle = title ? `${title} - Error` : 'Kusto Query Error';
+    const panel = vscode.window.createWebviewPanel('kustoError', panelTitle, vscode.ViewColumn.Three, // Use column 3 to avoid replacing results in column 2
     {
         enableScripts: true
     });
