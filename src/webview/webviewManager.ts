@@ -41,8 +41,8 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
     const chartType = renderMatch ? renderMatch[1].toLowerCase() : null;
     const hasVisualization = chartType && ['columnchart', 'barchart', 'piechart', 'timechart', 'linechart', 'areachart', 'scatterchart'].includes(chartType);
 
-    const tableRows = results.rows.map((row: any[]) => 
-        `<tr>${row.map((cell: any) => `<td title="${cell}">${cell}</td>`).join('')}</tr>`
+    const tableRows = results.rows.map((row: any[], rowIndex: number) => 
+        `<tr>${row.map((cell: any) => `<td title="${cell}"><div class="row-resize-handle"></div>${cell}</td>`).join('')}</tr>`
     ).join('');
 
     const statusClass = results.hasData ? 'success' : 'warning';
@@ -102,7 +102,7 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
             <div class="table-container">
                 <table>
                     <thead>
-                        <tr>${results.columns.map((col: string) => `<th>${col}</th>`).join('')}</tr>
+                        <tr>${results.columns.map((col: string) => `<th>${col}<div class="resize-handle"></div></th>`).join('')}</tr>
                     </thead>
                     <tbody>
                         ${tableRows}
@@ -114,7 +114,7 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
         <div class="table-container">
             <table>
                 <thead>
-                    <tr>${results.columns.map((col: string) => `<th>${col}</th>`).join('')}</tr>
+                    <tr>${results.columns.map((col: string) => `<th>${col}<div class="resize-handle"></div></th>`).join('')}</tr>
                 </thead>
                 <tbody>
                     ${tableRows}
@@ -141,6 +141,147 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 // Add active class to clicked button
                 event.target.classList.add('active');
             }
+
+            // Column resize functionality
+            let isResizing = false;
+            let currentColumn = null;
+            let currentHandle = null;
+            let startX = 0;
+            let startWidth = 0;
+
+            // Row resize functionality
+            let isRowResizing = false;
+            let currentRow = null;
+            let currentRowHandle = null;
+            let startY = 0;
+            let startHeight = 0;
+
+            function initializeResizing() {
+                // Add resize functionality to all resize handles
+                document.querySelectorAll('.resize-handle').forEach((handle, index) => {
+                    handle.addEventListener('mousedown', function(e) {
+                        console.log('Resize handle clicked:', index);
+                        isResizing = true;
+                        currentColumn = this.parentElement;
+                        currentHandle = this;
+                        startX = e.clientX;
+                        // Get the current width, not the computed style which might be auto
+                        startWidth = currentColumn.offsetWidth;
+                        
+                        currentColumn.classList.add('resizing');
+                        document.body.style.cursor = 'col-resize';
+                        document.body.style.userSelect = 'none';
+                        
+                        e.preventDefault();
+                        e.stopPropagation();
+                    });
+                });
+
+                // Add row resize functionality
+                document.querySelectorAll('.row-resize-handle').forEach((handle, index) => {
+                    handle.addEventListener('mousedown', function(e) {
+                        console.log('Row resize handle clicked:', index);
+                        isRowResizing = true;
+                        currentRow = this.closest('tr');
+                        currentRowHandle = this;
+                        startY = e.clientY;
+                        startHeight = currentRow.offsetHeight;
+                        
+                        currentRow.classList.add('resizing');
+                        document.body.style.cursor = 'row-resize';
+                        document.body.style.userSelect = 'none';
+                        
+                        e.preventDefault();
+                        e.stopPropagation();
+                    });
+                });
+
+                document.addEventListener('mousemove', function(e) {
+                    // Column resizing
+                    if (isResizing && currentColumn) {
+                        const deltaX = e.clientX - startX;
+                        const newWidth = startWidth + deltaX;
+                        
+                        if (newWidth > 30) { // Very small minimum width
+                            currentColumn.style.width = newWidth + 'px';
+                            currentColumn.style.minWidth = newWidth + 'px';
+                            currentColumn.style.maxWidth = newWidth + 'px';
+                            
+                            // Add expanded class to enable text wrapping
+                            currentColumn.classList.add('expanded');
+                            
+                            // Update corresponding data cells in this column
+                            const columnIndex = Array.from(currentColumn.parentNode.children).indexOf(currentColumn);
+                            const table = currentColumn.closest('table');
+                            const dataCells = table.querySelectorAll('tbody tr td:nth-child(' + (columnIndex + 1) + ')');
+                            dataCells.forEach(cell => {
+                                cell.style.width = newWidth + 'px';
+                                cell.style.minWidth = newWidth + 'px';
+                                cell.style.maxWidth = newWidth + 'px';
+                                cell.classList.add('expanded');
+                            });
+                        }
+                        e.preventDefault();
+                    }
+                    
+                    // Row resizing
+                    if (isRowResizing && currentRow) {
+                        const deltaY = e.clientY - startY;
+                        const newHeight = startHeight + deltaY;
+                        
+                        if (newHeight > 20) { // Minimum row height
+                            currentRow.style.height = newHeight + 'px';
+                            
+                            // Update all cells in this row and add expanded class
+                            const cells = currentRow.querySelectorAll('td');
+                            cells.forEach(cell => {
+                                cell.style.height = newHeight + 'px';
+                                cell.style.maxHeight = newHeight + 'px';
+                                cell.classList.add('expanded');
+                            });
+                        }
+                        e.preventDefault();
+                    }
+                });
+
+                document.addEventListener('mouseup', function(e) {
+                    if (isResizing) {
+                        console.log('Column resize ended');
+                        isResizing = false;
+                        if (currentColumn) {
+                            currentColumn.classList.remove('resizing');
+                        }
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        currentColumn = null;
+                        currentHandle = null;
+                    }
+                    
+                    if (isRowResizing) {
+                        console.log('Row resize ended');
+                        isRowResizing = false;
+                        if (currentRow) {
+                            currentRow.classList.remove('resizing');
+                        }
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        currentRow = null;
+                        currentRowHandle = null;
+                    }
+                });
+
+                // Prevent text selection during resize
+                document.addEventListener('selectstart', function(e) {
+                    if (isResizing || isRowResizing) {
+                        e.preventDefault();
+                    }
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('DOM loaded, initializing resize functionality');
+                initializeResizing();
+            });
         </script>
     </body>
     </html>`;
@@ -316,15 +457,26 @@ function getWebviewCSS(): string {
             border-collapse: collapse;
             background-color: var(--vscode-editor-background);
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            table-layout: auto;
         }
         th, td {
             text-align: left;
             padding: 8px 12px;
             border-bottom: 1px solid var(--vscode-panel-border);
-            max-width: 300px;
+            position: relative;
+            min-width: 50px;
+            border-right: 1px solid var(--vscode-panel-border);
+            vertical-align: top;
+            height: auto;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+        th.expanded, td.expanded {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            overflow: visible;
         }
         th {
             background-color: var(--vscode-panel-background);
@@ -332,6 +484,44 @@ function getWebviewCSS(): string {
             position: sticky;
             top: 0;
             z-index: 10;
+            user-select: none;
+        }
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            right: -2px;
+            width: 8px;
+            height: 100%;
+            cursor: col-resize;
+            background: transparent;
+            border-right: 1px solid var(--vscode-panel-border);
+            z-index: 20;
+        }
+        .resize-handle:hover {
+            border-right: 2px solid var(--vscode-charts-blue);
+            background: rgba(0, 122, 204, 0.1);
+        }
+        th.resizing {
+            user-select: none;
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .row-resize-handle {
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            cursor: row-resize;
+            background: transparent;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            z-index: 20;
+        }
+        .row-resize-handle:hover {
+            border-bottom: 2px solid var(--vscode-charts-blue);
+            background: rgba(0, 122, 204, 0.1);
+        }
+        tr.resizing {
+            background-color: var(--vscode-list-hoverBackground);
         }
         tr:hover {
             background-color: var(--vscode-list-hoverBackground);
