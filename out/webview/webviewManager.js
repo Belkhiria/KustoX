@@ -52,7 +52,7 @@ function getResultsWebviewContent(query, results, connection) {
     const renderMatch = query.match(/\|\s*render\s+(\w+)/i);
     const chartType = renderMatch ? renderMatch[1].toLowerCase() : null;
     const hasVisualization = chartType && ['columnchart', 'barchart', 'piechart', 'timechart', 'linechart', 'areachart', 'scatterchart'].includes(chartType);
-    const tableRows = results.rows.map((row, rowIndex) => `<tr>${row.map((cell) => `<td title="${cell}"><div class="row-resize-handle"></div>${cell}</td>`).join('')}</tr>`).join('');
+    const tableRows = results.rows.map((row, rowIndex) => `<tr data-row="${rowIndex}">${row.map((cell, cellIndex) => `<td data-column="${cellIndex}" data-value="${cell}" title="${cell}"><div class="row-resize-handle"></div>${cell}</td>`).join('')}</tr>`).join('');
     const statusClass = results.hasData ? 'success' : 'warning';
     const statusIcon = results.hasData ? '✓' : '⚠️';
     const statusText = results.hasData ? 'Query executed successfully' : 'Query executed with no data';
@@ -108,7 +108,7 @@ function getResultsWebviewContent(query, results, connection) {
             <div class="table-container">
                 <table>
                     <thead>
-                        <tr>${results.columns.map((col) => `<th>${col}<div class="resize-handle"></div></th>`).join('')}</tr>
+                        <tr>${results.columns.map((col, index) => `<th data-column="${index}" class="sortable">${col}<span class="sort-indicator"></span><div class="resize-handle"></div></th>`).join('')}</tr>
                     </thead>
                     <tbody>
                         ${tableRows}
@@ -120,7 +120,7 @@ function getResultsWebviewContent(query, results, connection) {
         <div class="table-container">
             <table>
                 <thead>
-                    <tr>${results.columns.map((col) => `<th>${col}<div class="resize-handle"></div></th>`).join('')}</tr>
+                    <tr>${results.columns.map((col, index) => `<th data-column="${index}" class="sortable">${col}<span class="sort-indicator"></span><div class="resize-handle"></div></th>`).join('')}</tr>
                 </thead>
                 <tbody>
                     ${tableRows}
@@ -162,7 +162,103 @@ function getResultsWebviewContent(query, results, connection) {
             let startY = 0;
             let startHeight = 0;
 
+            // Sorting state
+            let currentSort = { column: -1, direction: 'none' };
+
+            function sortTable(columnIndex, table) {
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                
+                // Determine sort direction
+                let direction = 'asc';
+                if (currentSort.column === columnIndex) {
+                    if (currentSort.direction === 'asc') {
+                        direction = 'desc';
+                    } else if (currentSort.direction === 'desc') {
+                        direction = 'asc';
+                    }
+                } else {
+                    direction = 'asc';
+                }
+                
+                // Update sort state
+                currentSort = { column: columnIndex, direction: direction };
+                
+                // Update header indicators
+                const headers = table.querySelectorAll('th');
+                headers.forEach((header, index) => {
+                    header.classList.remove('sort-asc', 'sort-desc');
+                    if (index === columnIndex) {
+                        header.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                    }
+                });
+                
+                // Sort rows
+                rows.sort((a, b) => {
+                    const cellA = a.querySelector('td[data-column="' + columnIndex + '"]');
+                    const cellB = b.querySelector('td[data-column="' + columnIndex + '"]');
+                    
+                    if (!cellA || !cellB) return 0;
+                    
+                    const valueA = cellA.getAttribute('data-value') || cellA.textContent;
+                    const valueB = cellB.getAttribute('data-value') || cellB.textContent;
+                    
+                    let comparison = 0;
+                    
+                    const valueAStr = valueA.toString().trim();
+                    const valueBStr = valueB.toString().trim();
+                    
+                    console.log('Comparing values:', valueAStr, 'vs', valueBStr);
+                    
+                    // Try to parse as dates first
+                    const dateA = new Date(valueAStr);
+                    const dateB = new Date(valueBStr);
+                    
+                    // Check if both parsed as valid dates
+                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+                        console.log('Sorting as dates:', dateA, 'vs', dateB);
+                        comparison = dateA.getTime() - dateB.getTime();
+                        console.log('Date comparison result:', comparison);
+                    } else {
+                        // Try numeric comparison first
+                        const numA = parseFloat(valueAStr);
+                        const numB = parseFloat(valueBStr);
+                        
+                        if (!isNaN(numA) && !isNaN(numB) && 
+                            isFinite(numA) && isFinite(numB)) {
+                            comparison = numA - numB;
+                        } else {
+                            // String comparison
+                            comparison = valueAStr.localeCompare(valueBStr, undefined, { numeric: true });
+                        }
+                    }
+                    
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+                
+                // Reorder DOM
+                tbody.innerHTML = '';
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
             function initializeResizing() {
+                // Add sorting functionality to column headers
+                document.querySelectorAll('th.sortable').forEach((header, index) => {
+                    header.addEventListener('click', function(e) {
+                        // Don't sort if clicking on resize handle
+                        if (e.target.classList.contains('resize-handle')) {
+                            return;
+                        }
+                        
+                        const columnIndex = parseInt(this.getAttribute('data-column'));
+                        const table = this.closest('table');
+                        sortTable(columnIndex, table);
+                        
+                        e.preventDefault();
+                        e.stopPropagation();
+                    });
+                });
+
                 // Add resize functionality to all resize handles
                 document.querySelectorAll('.resize-handle').forEach((handle, index) => {
                     handle.addEventListener('mousedown', function(e) {
@@ -483,6 +579,33 @@ function getWebviewCSS() {
             top: 0;
             z-index: 10;
             user-select: none;
+        }
+        th.sortable {
+            cursor: pointer;
+            position: relative;
+        }
+        th.sortable:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .sort-indicator {
+            position: absolute;
+            right: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+        th.sort-asc .sort-indicator::after {
+            content: '▲';
+            color: var(--vscode-charts-blue);
+        }
+        th.sort-desc .sort-indicator::after {
+            content: '▼';
+            color: var(--vscode-charts-blue);
+        }
+        th.sortable:hover .sort-indicator::after {
+            content: '↕';
+            color: var(--vscode-foreground);
         }
         .resize-handle {
             position: absolute;
