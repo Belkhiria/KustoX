@@ -60,17 +60,20 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
         <title>Kusto Query Results</title>
         
         <!-- DataTables CSS -->
-        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+        <link rel="stylesheet" href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.css">
         <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
         <link rel="stylesheet" href="https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css">
+        <link rel="stylesheet" href="https://cdn.datatables.net/columncontrol/1.0.7/css/columnControl.dataTables.css">
         
         <!-- jQuery (required by DataTables) -->
-        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
         
         <!-- DataTables Core JS -->
-        <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.datatables.net/2.3.2/js/dataTables.js"></script>
         
         <!-- DataTables Extensions -->
+        <script src="https://cdn.datatables.net/columncontrol/1.0.7/js/dataTables.columnControl.js"></script>
+        <script src="https://cdn.datatables.net/columncontrol/1.0.7/js/columnControl.dataTables.js"></script>
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script>
@@ -125,6 +128,47 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
             
             .dt-button:hover {
                 background-color: #005a9e;
+            }
+            
+            /* ColumnControl styling */
+            .dt-columncontrol-search {
+                background-color: var(--vscode-input-background);
+                border: 1px solid var(--vscode-input-border);
+                color: var(--vscode-input-foreground);
+                padding: 4px 8px;
+                margin: 2px;
+                border-radius: 3px;
+                font-size: 12px;
+            }
+            
+            .dt-columncontrol-search:focus {
+                outline: 1px solid var(--vscode-focusBorder);
+                background-color: var(--vscode-input-background);
+            }
+            
+            .dt-columncontrol-searchList {
+                background-color: var(--vscode-dropdown-background);
+                border: 1px solid var(--vscode-dropdown-border);
+                color: var(--vscode-dropdown-foreground);
+                max-height: 200px;
+                overflow-y: auto;
+                border-radius: 3px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            
+            .dt-columncontrol-searchList-item {
+                padding: 6px 12px;
+                cursor: pointer;
+                border-bottom: 1px solid var(--vscode-panel-border);
+            }
+            
+            .dt-columncontrol-searchList-item:hover {
+                background-color: var(--vscode-list-hoverBackground);
+            }
+            
+            .dt-columncontrol-searchList-item.selected {
+                background-color: var(--vscode-list-activeSelectionBackground);
+                color: var(--vscode-list-activeSelectionForeground);
             }
         </style>
     </head>
@@ -253,15 +297,26 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 
                 const columnTypes = detectColumnTypes(tableData, columns);
                 
-                // Build simple column definitions for performance
+                // Build column definitions with ColumnControl
                 const columnDefs = [];
                 
-                // Add timestamp class to date columns only
+                // Add timestamp class to date columns and configure ColumnControl
                 columns.forEach((col, index) => {
                     if (columnTypes[index] === 'date') {
                         columnDefs.push({
                             targets: index,
-                            className: 'timestamp-column'
+                            className: 'timestamp-column',
+                            columnControl: ['order', ['searchList']]  // Enable search list for date columns
+                        });
+                    } else if (columnTypes[index] === 'string') {
+                        columnDefs.push({
+                            targets: index,
+                            columnControl: ['order', ['searchList']]  // Enable search list for string columns
+                        });
+                    } else {
+                        columnDefs.push({
+                            targets: index,
+                            columnControl: ['order', ['search']]  // Basic search for numeric columns
                         });
                     }
                 });
@@ -280,6 +335,9 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                             smart: true,
                             regex: false
                         },
+                        
+                        // ColumnControl configuration
+                        columnControl: ['order', ['search']],  // Default configuration for all columns
                         
                         // Sorting
                         ordering: true,
