@@ -611,6 +611,15 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
             <div class="context-menu-item" onclick="copyAsDatabase()">Copy as database</div>
         </div>
 
+        <!-- Cell Content Panel (below table like Kusto Explorer) -->
+        <div id="cell-content-panel" class="cell-content-panel">
+            <div class="cell-content-header">
+                <span id="cell-content-title">Cell Content</span>
+                <button class="cell-content-close" onclick="closeCellContentPanel()">&times;</button>
+            </div>
+            <div id="cell-content-body" class="cell-content-body"></div>
+        </div>
+
         <script>
             let dataTable = null;
             let selectedCells = [];
@@ -834,6 +843,16 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                         
                         // Show context menu
                         showContextMenu(e.pageX, e.pageY);
+                    });
+                    
+                    // Double-click to show full cell content
+                    $('#kusto-table tbody').on('dblclick', 'td', function(e) {
+                        e.preventDefault();
+                        const cellText = $(this).text().trim();
+                        const columnIndex = $(this).index();
+                        const columnName = $('#kusto-table thead th').eq(columnIndex).text();
+                        
+                        showCellContentPanel(cellText, columnName);
                     });
                     
                     // Hide context menu on click elsewhere
@@ -1167,6 +1186,25 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 currentCellContent = '';
             }
             
+            // Cell content panel functions
+            function showCellContentPanel(cellContent, columnName) {
+                const panel = document.getElementById('cell-content-panel');
+                const title = document.getElementById('cell-content-title');
+                const body = document.getElementById('cell-content-body');
+                
+                title.textContent = columnName + ' - Cell Content';
+                body.textContent = cellContent || '(empty)';
+                panel.classList.add('visible');
+                
+                // Scroll to the panel
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            
+            function closeCellContentPanel() {
+                const panel = document.getElementById('cell-content-panel');
+                panel.classList.remove('visible');
+            }
+            
             // Initialize DataTable on DOM ready
             $(document).ready(function() {
                 // Check if we're showing the table tab initially
@@ -1392,6 +1430,7 @@ function getWebviewCSS(): string {
             border-bottom: 1px solid #dee2e6;
             position: relative;
             min-width: 50px;
+            max-width: 200px;
             border-right: 1px solid #dee2e6;
             vertical-align: top;
             height: auto;
@@ -1485,6 +1524,99 @@ function getWebviewCSS(): string {
         }
         h3 {
             color: var(--vscode-editor-foreground);
+        }
+        
+        /* Cell content panel (below table like Kusto Explorer) */
+        .cell-content-panel {
+            display: none;
+            background-color: #ffffff;
+            border: 2px solid #0078d4;
+            border-radius: 6px;
+            margin-top: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .cell-content-panel.visible {
+            display: block;
+        }
+        
+        .cell-content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            border-radius: 4px 4px 0 0;
+        }
+        
+        .cell-content-header span {
+            font-size: 14px;
+            font-weight: 600;
+            color: #212529;
+        }
+        
+        .cell-content-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            width: 25px;
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 3px;
+        }
+        
+        .cell-content-close:hover {
+            background-color: #e9ecef;
+            color: #212529;
+        }
+        
+        .cell-content-body {
+            padding: 15px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #212529;
+            background-color: #ffffff;
+            min-height: 60px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        /* Enhanced scrollbar for cell content panel */
+        .cell-content-body::-webkit-scrollbar {
+            width: 12px;
+        }
+        
+        .cell-content-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        
+        .cell-content-body::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 6px;
+            border: 2px solid #f1f1f1;
+        }
+        
+        .cell-content-body::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* For Firefox */
+        .cell-content-body {
+            scrollbar-width: auto;
+            scrollbar-color: #888 #f1f1f1;
         }
     `;
 }
