@@ -89,20 +89,43 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
         <style>
             ${getWebviewCSS()}
             
-            /* Additional DataTables styling for Kusto results */
+            /* Additional DataTables styling for Kusto results - Light Theme (Table Only) */
             .dataTables_wrapper {
                 margin-top: 20px;
+                background-color: #ffffff;
+                color: #333333;
+                border-radius: 4px;
+                padding: 10px;
+                border: 1px solid #dee2e6;
             }
             
             table.dataTable thead th {
-                background-color: #f0f0f0;
+                background-color: #f8f9fa;
+                color: #212529;
                 font-weight: 600;
-                border-bottom: 2px solid #ddd;
+                border-bottom: 2px solid #dee2e6;
+                border-right: 1px solid #dee2e6;
             }
             
             table.dataTable tbody td {
                 font-family: 'Cascadia Code', 'Courier New', monospace;
                 font-size: 13px;
+                background-color: #ffffff;
+                color: #212529;
+                border-bottom: 1px solid #dee2e6;
+                border-right: 1px solid #dee2e6;
+            }
+            
+            table.dataTable tbody tr:hover {
+                background-color: #f8f9fa !important;
+            }
+            
+            table.dataTable tbody tr:nth-child(even) {
+                background-color: #f8f9fa;
+            }
+            
+            table.dataTable tbody tr:nth-child(even):hover {
+                background-color: #e9ecef !important;
             }
             
             /* Highlight timestamp columns */
@@ -130,11 +153,11 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 background-color: #005a9e;
             }
             
-            /* ColumnControl styling */
+            /* ColumnControl styling - Light Theme */
             .dt-columncontrol-search {
-                background-color: var(--vscode-input-background);
-                border: 1px solid var(--vscode-input-border);
-                color: var(--vscode-input-foreground);
+                background-color: #ffffff;
+                border: 1px solid #ced4da;
+                color: #495057;
                 padding: 4px 8px;
                 margin: 2px;
                 border-radius: 3px;
@@ -142,14 +165,15 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
             }
             
             .dt-columncontrol-search:focus {
-                outline: 1px solid var(--vscode-focusBorder);
-                background-color: var(--vscode-input-background);
+                outline: 2px solid #0066cc;
+                background-color: #ffffff;
+                border-color: #0066cc;
             }
             
             .dt-columncontrol-searchList {
-                background-color: var(--vscode-dropdown-background);
-                border: 1px solid var(--vscode-dropdown-border);
-                color: var(--vscode-dropdown-foreground);
+                background-color: #ffffff;
+                border: 1px solid #ced4da;
+                color: #495057;
                 max-height: 200px;
                 overflow-y: auto;
                 border-radius: 3px;
@@ -159,16 +183,63 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
             .dt-columncontrol-searchList-item {
                 padding: 6px 12px;
                 cursor: pointer;
-                border-bottom: 1px solid var(--vscode-panel-border);
+                border-bottom: 1px solid #e9ecef;
+                background-color: #ffffff;
+                color: #495057;
             }
             
             .dt-columncontrol-searchList-item:hover {
-                background-color: var(--vscode-list-hoverBackground);
+                background-color: #f8f9fa;
             }
             
             .dt-columncontrol-searchList-item.selected {
-                background-color: var(--vscode-list-activeSelectionBackground);
-                color: var(--vscode-list-activeSelectionForeground);
+                background-color: #0066cc;
+                color: #ffffff;
+            }
+            
+            /* DataTables controls styling */
+            .dataTables_filter input {
+                background-color: #ffffff !important;
+                border: 1px solid #ced4da !important;
+                color: #495057 !important;
+                padding: 6px 12px !important;
+                border-radius: 4px !important;
+            }
+            
+            .dataTables_filter input:focus {
+                outline: 2px solid #0066cc !important;
+                border-color: #0066cc !important;
+            }
+            
+            .dataTables_length select {
+                background-color: #ffffff !important;
+                border: 1px solid #ced4da !important;
+                color: #495057 !important;
+                padding: 4px 8px !important;
+                border-radius: 4px !important;
+            }
+            
+            .dataTables_info {
+                color: #6c757d !important;
+            }
+            
+            .dataTables_paginate .paginate_button {
+                background-color: #ffffff !important;
+                border: 1px solid #ced4da !important;
+                color: #495057 !important;
+                margin: 0 2px !important;
+                border-radius: 4px !important;
+            }
+            
+            .dataTables_paginate .paginate_button:hover {
+                background-color: #f8f9fa !important;
+                border-color: #adb5bd !important;
+            }
+            
+            .dataTables_paginate .paginate_button.current {
+                background-color: #0066cc !important;
+                color: #ffffff !important;
+                border-color: #0066cc !important;
             }
         </style>
     </head>
@@ -555,14 +626,16 @@ function getWebviewCSS(): string {
             background-color: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
             margin: 20px;
+            line-height: 1.5;
         }
         .connection-info {
-            background-color: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
+            background-color: var(--vscode-inputValidation-infoBackground);
+            color: var(--vscode-inputValidation-infoForeground);
             padding: 8px 12px;
             border-radius: 4px;
             margin-bottom: 15px;
             font-size: 12px;
+            border: 1px solid var(--vscode-inputValidation-infoBorder);
         }
         .stats {
             margin-bottom: 20px;
@@ -576,28 +649,37 @@ function getWebviewCSS(): string {
             display: flex;
             align-items: center;
             gap: 5px;
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-contrastBorder);
         }
         .results-tabs {
             display: flex;
             margin-bottom: 20px;
             border-bottom: 1px solid var(--vscode-panel-border);
+            background-color: var(--vscode-tab-inactiveBackground);
+            border-radius: 4px 4px 0 0;
         }
         .tab-button {
             padding: 10px 20px;
             background: none;
             border: none;
-            color: var(--vscode-foreground);
+            color: var(--vscode-tab-inactiveForeground);
             cursor: pointer;
             border-bottom: 2px solid transparent;
             font-family: var(--vscode-font-family);
+            font-weight: 500;
         }
         .tab-button.active {
-            border-bottom-color: var(--vscode-charts-blue);
-            color: var(--vscode-charts-blue);
-            font-weight: bold;
+            border-bottom-color: var(--vscode-tab-activeBorder);
+            color: var(--vscode-tab-activeForeground);
+            font-weight: 600;
+            background-color: var(--vscode-tab-activeBackground);
         }
         .tab-button:hover {
-            background-color: var(--vscode-list-hoverBackground);
+            background-color: var(--vscode-tab-hoverBackground);
         }
         .tab-content {
             display: none;
@@ -618,23 +700,28 @@ function getWebviewCSS(): string {
             text-align: center;
             margin-bottom: 20px;
             font-size: 18px;
-            font-weight: bold;
-            color: var(--vscode-charts-blue);
+            font-weight: 600;
+            color: var(--vscode-textLink-foreground);
         }
+        
+        /* Light theme styling for table only */
         table {
             width: 100%;
             border-collapse: collapse;
-            background-color: var(--vscode-editor-background);
+            background-color: #ffffff;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             table-layout: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            overflow: hidden;
         }
         th, td {
             text-align: left;
             padding: 8px 12px;
-            border-bottom: 1px solid var(--vscode-panel-border);
+            border-bottom: 1px solid #dee2e6;
             position: relative;
             min-width: 50px;
-            border-right: 1px solid var(--vscode-panel-border);
+            border-right: 1px solid #dee2e6;
             vertical-align: top;
             height: auto;
             overflow: hidden;
@@ -642,7 +729,8 @@ function getWebviewCSS(): string {
             white-space: nowrap;
         }
         th {
-            background-color: var(--vscode-panel-background);
+            background-color: #f8f9fa;
+            color: #495057;
             font-weight: 600;
             position: sticky;
             top: 0;
@@ -650,30 +738,45 @@ function getWebviewCSS(): string {
             user-select: none;
         }
         tr:hover {
-            background-color: var(--vscode-list-hoverBackground);
+            background-color: #f8f9fa;
         }
+        
         .success {
-            color: var(--vscode-charts-green);
+            color: var(--vscode-testing-iconPassed);
+            font-weight: 600;
         }
         .warning {
-            color: var(--vscode-charts-orange);
+            color: var(--vscode-testing-iconQueued);
+            font-weight: 600;
         }
         .table-container {
             max-height: 60vh;
             overflow: auto;
             border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
         }
         .error-container {
             padding: 15px;
             margin: 15px 0;
             border-radius: 4px;
             border: 1px solid var(--vscode-inputValidation-errorBorder);
+            background-color: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground);
         }
         .help-section {
-            background-color: var(--vscode-textBlockQuote-background);
+            background-color: var(--vscode-inputValidation-infoBackground);
+            color: var(--vscode-inputValidation-infoForeground);
             padding: 15px;
             margin-top: 20px;
             border-radius: 4px;
+            border: 1px solid var(--vscode-inputValidation-infoBorder);
+        }
+        h2 {
+            color: var(--vscode-editor-foreground);
+            margin-top: 0;
+        }
+        h3 {
+            color: var(--vscode-editor-foreground);
         }
     `;
 }
