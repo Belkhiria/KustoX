@@ -99,58 +99,79 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 border: 1px solid #dee2e6;
             }
             
+            /* Simple table styling like Kusto Explorer */
+            table.dataTable {
+                border-collapse: collapse;
+                border: 1px solid #ccc;
+            }
+            
             table.dataTable thead th {
-                background-color: #f8f9fa;
-                color: #212529;
-                font-weight: 600;
-                border-bottom: 2px solid #dee2e6;
-                border-right: 1px solid #dee2e6;
+                background-color: #f0f0f0;
+                color: #000;
+                font-weight: bold;
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: left;
             }
             
             table.dataTable tbody td {
-                font-family: 'Cascadia Code', 'Courier New', monospace;
-                font-size: 13px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 12px;
                 background-color: #ffffff;
-                color: #212529;
-                border-bottom: 1px solid #dee2e6;
-                border-right: 1px solid #dee2e6;
+                color: #000;
+                border: 1px solid #ccc;
+                padding: 4px 8px;
+                text-align: left;
             }
             
             table.dataTable tbody tr:hover {
-                background-color: #f8f9fa !important;
+                background-color: #e6f3ff;
             }
             
             table.dataTable tbody tr:nth-child(even) {
-                background-color: #f8f9fa;
+                background-color: #f9f9f9;
             }
             
             table.dataTable tbody tr:nth-child(even):hover {
-                background-color: #e9ecef !important;
+                background-color: #e6f3ff;
             }
             
-            /* Highlight timestamp columns */
-            table.dataTable tbody td.timestamp-column {
-                color: #0066cc;
-                font-weight: 500;
+            /* Cell selection styling like Kusto Explorer */
+            table.dataTable tbody td.selected {
+                background-color: #316AC5 !important;
+                color: white !important;
             }
             
-            /* Export buttons styling */
-            .dt-buttons {
-                margin-bottom: 10px;
+            /* Context menu styling */
+            .context-menu {
+                position: absolute;
+                background: white;
+                border: 1px solid #ccc;
+                box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+                z-index: 1000;
+                min-width: 200px;
+                font-family: Arial, sans-serif;
+                font-size: 12px;
             }
             
-            .dt-button {
+            .context-menu-item {
+                padding: 8px 12px;
+                cursor: pointer;
+                border-bottom: 1px solid #eee;
+            }
+            
+            .context-menu-item:hover {
                 background-color: #0078d4;
                 color: white;
-                border: none;
-                padding: 5px 15px;
-                margin-right: 5px;
-                cursor: pointer;
-                border-radius: 3px;
             }
             
-            .dt-button:hover {
-                background-color: #005a9e;
+            .context-menu-item:last-child {
+                border-bottom: none;
+            }
+            
+            /* Remove DataTables export buttons and other controls */
+            .dt-buttons, .dataTables_filter, .dataTables_length {
+                display: none;
             }
             
             /* ColumnControl styling - Light Theme */
@@ -388,24 +409,40 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 ${tableRows}
             </tbody>
         </table>
-        
-        <!-- Cell Detail Panel -->
-        <div id="cell-detail-panel" class="cell-detail-panel">
-            <div class="cell-detail-header">
-                <span id="cell-detail-title">Cell Content Details</span>
-            </div>
-            <div class="cell-detail-content" id="cell-detail-content">
-                Click on any table cell to view its content here...
-            </div>
-            <div class="cell-detail-actions">
-                <button class="cell-detail-button" onclick="copyCellContent()">📋 Copy Content</button>
-                <button class="cell-detail-button secondary" onclick="closeCellDetail()">✕ Close</button>
-            </div>
-        </div>
         `}
+
+        <!-- Context Menu for Copy Options -->
+        <div id="context-menu" class="context-menu" style="display: none;">
+            <div class="context-menu-item" onclick="copyWithHeaders()">Copy with headers</div>
+            <div class="context-menu-item" onclick="copyAsHtml()">Copy as HTML</div>
+            <div class="context-menu-item" onclick="copyAsDatabase()">Copy as database</div>
+        </div>
 
         <script>
             let dataTable = null;
+            let selectedCells = [];
+            let contextMenu = null;
+            
+            // Original data for copy operations
+            const originalColumns = ${JSON.stringify(results.columns)};
+            const originalData = ${JSON.stringify(results.rows)};
+            
+            // Context menu functions (defined at top level for global access)
+            function hideContextMenu() {
+                const contextMenu = $('#context-menu');
+                if (contextMenu.length) {
+                    contextMenu.hide();
+                }
+            }
+            
+            function showContextMenu(x, y) {
+                contextMenu = $('#context-menu');
+                contextMenu.css({
+                    display: 'block',
+                    left: x + 'px',
+                    top: y + 'px'
+                });
+            }
             
             // Detect column types based on data
             function detectColumnTypes(data, columns) {
@@ -497,65 +534,32 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                     }
                 });
                 
-                // Initialize DataTable with configuration
+                // Initialize simple DataTable like Kusto Explorer
                 try {
                     dataTable = $('#kusto-table').DataTable({
-                        // Basic options - optimized for performance
+                        // Basic options
                         paging: true,
-                        pageLength: 50,  // Reduced from 100 for better performance
-                        lengthMenu: [[25, 50, 100, 250, -1], [25, 50, 100, 250, "All"]],
+                        pageLength: 100,
+                        lengthMenu: [[50, 100, 250, -1], [50, 100, 250, "All"]],
                         
                         // Searching
                         searching: true,
-                        search: {
-                            smart: true,
-                            regex: false
-                        },
-                        
-                        // ColumnControl configuration
-                        columnControl: ['order', ['search']],  // Default configuration for all columns
                         
                         // Sorting
                         ordering: true,
-                        order: [], // No default sorting, preserve Kusto's order
+                        order: [], // Preserve Kusto's order
                         
                         // Scrolling
                         scrollX: true,
-                        scrollY: '60vh',
+                        scrollY: '70vh',
                         scrollCollapse: true,
                         
-                        // Performance optimizations
-                        deferRender: true,
+                        // Simple configuration
                         processing: false,
                         serverSide: false,
                         
-                        // Column definitions
-                        columnDefs: columnDefs,
-                        
-                        // Simplified buttons (removed SearchPanes for performance)
-                        dom: 'Bfrtip',
-                        buttons: [
-                            {
-                                extend: 'copy',
-                                text: '📋 Copy',
-                                className: 'dt-button-copy'
-                            },
-                            {
-                                extend: 'csv',
-                                text: '📄 CSV',
-                                className: 'dt-button-csv'
-                            },
-                            {
-                                extend: 'excel',
-                                text: '📊 Excel',
-                                className: 'dt-button-excel'
-                            },
-                            {
-                                extend: 'colvis',
-                                text: '👁️ Columns',
-                                className: 'dt-button-colvis'
-                            }
-                        ],
+                        // Remove buttons and extra features
+                        dom: 'lfrtip', // Simple layout without buttons
                         
                         // Language
                         language: {
@@ -571,30 +575,298 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                         }
                     });
                     
-                    console.log('✅ DataTables initialized successfully with', columns.length, 'columns');
+                    console.log('✅ DataTables initialized successfully');
                     
-                    // Add cell click functionality for detail panel
-                    $('#kusto-table tbody').on('click', 'td', function() {
-                        // Remove previous selection
-                        $('#kusto-table tbody td').removeClass('cell-selected');
-                        
-                        // Add selection to clicked cell
-                        $(this).addClass('cell-selected');
-                        
-                        // Get cell data
-                        const cellData = dataTable.cell(this).data();
-                        const columnIndex = dataTable.cell(this).index().column;
-                        const rowIndex = dataTable.cell(this).index().row;
-                        const columnName = columns[columnIndex];
-                        
-                        // Show detail panel
-                        showCellDetail(cellData, columnName, rowIndex + 1, columnIndex + 1);
+                    // Add cell selection like Kusto Explorer
+                    let isSelecting = false;
+                    let startCell = null;
+                    let endCell = null;
+                    
+                    // Mouse events for cell selection
+                    $('#kusto-table tbody').on('mousedown', 'td', function(e) {
+                        if (e.which === 1) { // Left click
+                            e.preventDefault();
+                            isSelecting = true;
+                            startCell = {row: $(this).parent().index(), col: $(this).index()};
+                            endCell = startCell;
+                            
+                            // Clear previous selection
+                            $('#kusto-table tbody td').removeClass('selected');
+                            $(this).addClass('selected');
+                            selectedCells = [this];
+                        }
                     });
+                    
+                    $('#kusto-table tbody').on('mouseover', 'td', function() {
+                        if (isSelecting) {
+                            endCell = {row: $(this).parent().index(), col: $(this).index()};
+                            updateSelection();
+                        }
+                    });
+                    
+                    $(document).on('mouseup', function() {
+                        isSelecting = false;
+                    });
+                    
+                    // Right-click context menu
+                    $('#kusto-table tbody').on('contextmenu', 'td', function(e) {
+                        e.preventDefault();
+                        
+                        // If cell not selected, select it
+                        if (!$(this).hasClass('selected')) {
+                            $('#kusto-table tbody td').removeClass('selected');
+                            $(this).addClass('selected');
+                            selectedCells = [this];
+                        }
+                        
+                        // Show context menu
+                        showContextMenu(e.pageX, e.pageY);
+                    });
+                    
+                    // Hide context menu on click elsewhere
+                    $(document).on('click', function() {
+                        hideContextMenu();
+                    });
+                    
+                    function updateSelection() {
+                        $('#kusto-table tbody td').removeClass('selected');
+                        selectedCells = [];
+                        
+                        const minRow = Math.min(startCell.row, endCell.row);
+                        const maxRow = Math.max(startCell.row, endCell.row);
+                        const minCol = Math.min(startCell.col, endCell.col);
+                        const maxCol = Math.max(startCell.col, endCell.col);
+                        
+                        $('#kusto-table tbody tr').each(function(rowIndex) {
+                            if (rowIndex >= minRow && rowIndex <= maxRow) {
+                                $(this).find('td').each(function(colIndex) {
+                                    if (colIndex >= minCol && colIndex <= maxCol) {
+                                        $(this).addClass('selected');
+                                        selectedCells.push(this);
+                                    }
+                                });
+                            }
+                        });
+                    }
                     
                 } catch (error) {
                     console.error('❌ Failed to initialize DataTables:', error);
                     console.log('Falling back to basic table display');
                 }
+                
+                // Context menu functions (outside try block for global access)
+                function hideContextMenu() {
+                    const contextMenu = $('#context-menu');
+                    if (contextMenu.length) {
+                        contextMenu.hide();
+                    }
+                }
+            }
+            
+            // Context menu copy functions
+            function copyWithHeaders() {
+                hideContextMenu();
+                
+                if (selectedCells.length === 0) return;
+                
+                // Get selection bounds
+                let minRow = Infinity, maxRow = -1, minCol = Infinity, maxCol = -1;
+                selectedCells.forEach(cell => {
+                    const row = $(cell).parent().index();
+                    const col = $(cell).index();
+                    minRow = Math.min(minRow, row);
+                    maxRow = Math.max(maxRow, row);
+                    minCol = Math.min(minCol, col);
+                    maxCol = Math.max(maxCol, col);
+                });
+                
+                let copyText = '';
+                const TAB = String.fromCharCode(9);
+                const NEWLINE = String.fromCharCode(10);
+                
+                // Add headers from original data
+                const headers = [];
+                for (let i = minCol; i <= maxCol; i++) {
+                    headers.push(originalColumns[i]);
+                }
+                copyText += headers.join(TAB) + NEWLINE;
+                
+                // Add data from original data
+                for (let rowIndex = minRow; rowIndex <= maxRow; rowIndex++) {
+                    if (rowIndex < originalData.length) {
+                        const rowData = [];
+                        for (let colIndex = minCol; colIndex <= maxCol; colIndex++) {
+                            if (colIndex < originalData[rowIndex].length) {
+                                const cellValue = originalData[rowIndex][colIndex];
+                                rowData.push(cellValue == null ? '' : cellValue.toString());
+                            }
+                        }
+                        copyText += rowData.join(TAB) + NEWLINE;
+                    }
+                }
+                
+                navigator.clipboard.writeText(copyText.trim()).then(() => {
+                    console.log('Copied with headers successfully');
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                });
+            }
+            
+            function copyAsHtml() {
+                hideContextMenu();
+                
+                if (selectedCells.length === 0) return;
+                
+                // Get selection bounds
+                let minRow = Infinity, maxRow = -1, minCol = Infinity, maxCol = -1;
+                selectedCells.forEach(cell => {
+                    const row = $(cell).parent().index();
+                    const col = $(cell).index();
+                    minRow = Math.min(minRow, row);
+                    maxRow = Math.max(maxRow, row);
+                    minCol = Math.min(minCol, col);
+                    maxCol = Math.max(maxCol, col);
+                });
+                
+                // Create styled HTML table exactly like Azure Data Explorer
+                let htmlText = '<style>' +
+                    'table { border-collapse: collapse; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; width: auto; margin: 0; }' +
+                    'th { background: linear-gradient(to bottom, #f8f8f8 0%, #e8e8e8 100%); border: 1px solid #d0d0d0; padding: 8px 12px; text-align: left; font-weight: 600; color: #333; white-space: nowrap; }' +
+                    'td { border: 1px solid #d0d0d0; padding: 6px 12px; text-align: left; color: #333; background-color: white; white-space: nowrap; }' +
+                    'tr:nth-child(even) td { background-color: #f9f9f9; }' +
+                    'tr:hover td { background-color: #e3f2fd !important; }' +
+                    'th:first-child, td:first-child { border-left: 2px solid #0078d4; }' +
+                    'table { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }' +
+                    '</style>' +
+                    '<table><thead><tr>';
+                
+                // Add headers from original data
+                for (let i = minCol; i <= maxCol; i++) {
+                    htmlText += '<th>' + escapeHtml(originalColumns[i]) + '</th>';
+                }
+                htmlText += '</tr></thead><tbody>';
+                
+                // Add data rows from original data
+                for (let rowIndex = minRow; rowIndex <= maxRow; rowIndex++) {
+                    if (rowIndex < originalData.length) {
+                        htmlText += '<tr>';
+                        for (let colIndex = minCol; colIndex <= maxCol; colIndex++) {
+                            if (colIndex < originalData[rowIndex].length) {
+                                const cellValue = originalData[rowIndex][colIndex];
+                                htmlText += '<td>' + escapeHtml(cellValue == null ? '' : cellValue.toString()) + '</td>';
+                            }
+                        }
+                        htmlText += '</tr>';
+                    }
+                }
+                htmlText += '</tbody></table>';
+                
+                // Create plain text version for fallback
+                let plainText = '';
+                const TAB = String.fromCharCode(9);
+                const NEWLINE = String.fromCharCode(10);
+                
+                // Add headers
+                const headers = [];
+                for (let i = minCol; i <= maxCol; i++) {
+                    headers.push(originalColumns[i]);
+                }
+                plainText += headers.join(TAB) + NEWLINE;
+                
+                // Add data
+                for (let rowIndex = minRow; rowIndex <= maxRow; rowIndex++) {
+                    if (rowIndex < originalData.length) {
+                        const rowData = [];
+                        for (let colIndex = minCol; colIndex <= maxCol; colIndex++) {
+                            if (colIndex < originalData[rowIndex].length) {
+                                const cellValue = originalData[rowIndex][colIndex];
+                                rowData.push(cellValue == null ? '' : cellValue.toString());
+                            }
+                        }
+                        plainText += rowData.join(TAB) + NEWLINE;
+                    }
+                }
+                
+                // Use ClipboardItem to copy both HTML and plain text
+                if (navigator.clipboard && navigator.clipboard.write) {
+                    const clipboardItem = new ClipboardItem({
+                        'text/html': new Blob([htmlText], { type: 'text/html' }),
+                        'text/plain': new Blob([plainText.trim()], { type: 'text/plain' })
+                    });
+                    
+                    navigator.clipboard.write([clipboardItem]).then(() => {
+                        console.log('Copied as formatted table successfully');
+                    }).catch(err => {
+                        console.error('Rich copy failed, falling back to plain text:', err);
+                        navigator.clipboard.writeText(plainText.trim());
+                    });
+                } else {
+                    // Fallback to plain text
+                    navigator.clipboard.writeText(plainText.trim()).then(() => {
+                        console.log('Copied as plain text table');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                    });
+                }
+            }
+            
+            // Helper function to escape HTML
+            function escapeHtml(unsafe) {
+                if (unsafe == null) return '';
+                return unsafe.toString()
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+            
+            function copyAsDatabase() {
+                hideContextMenu();
+                
+                if (selectedCells.length === 0) return;
+                
+                // Get selection bounds
+                let minRow = Infinity, maxRow = -1, minCol = Infinity, maxCol = -1;
+                selectedCells.forEach(cell => {
+                    const row = $(cell).parent().index();
+                    const col = $(cell).index();
+                    minRow = Math.min(minRow, row);
+                    maxRow = Math.max(maxRow, row);
+                    minCol = Math.min(minCol, col);
+                    maxCol = Math.max(maxCol, col);
+                });
+                
+                let sqlText = '';
+                
+                // Add data in SQL format from original data
+                for (let rowIndex = minRow; rowIndex <= maxRow; rowIndex++) {
+                    if (rowIndex < originalData.length) {
+                        const rowData = [];
+                        for (let colIndex = minCol; colIndex <= maxCol; colIndex++) {
+                            if (colIndex < originalData[rowIndex].length) {
+                                let value = originalData[rowIndex][colIndex];
+                                if (value == null) {
+                                    rowData.push('NULL');
+                                } else if (typeof value === 'string') {
+                                    // Escape single quotes and wrap strings in quotes
+                                    value = "'" + value.replace(/'/g, "''") + "'";
+                                    rowData.push(value);
+                                } else {
+                                    rowData.push(value.toString());
+                                }
+                            }
+                        }
+                        sqlText += '(' + rowData.join(', ') + ')';
+                        if (rowIndex < maxRow) sqlText += ',' + String.fromCharCode(10);
+                    }
+                }
+                
+                navigator.clipboard.writeText(sqlText).then(() => {
+                    console.log('Copied as database format successfully');
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                });
             }
 
             function showTab(tabName) {
