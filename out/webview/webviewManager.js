@@ -555,6 +555,9 @@ function getResultsWebviewContent(query, results, connection) {
                         ordering: true,
                         order: [], // Preserve Kusto's order
                         
+                        // Column definitions for filtering
+                        columnDefs: columnDefs,
+                        
                         // Scrolling
                         scrollX: true,
                         scrollY: '70vh',
@@ -564,8 +567,14 @@ function getResultsWebviewContent(query, results, connection) {
                         processing: false,
                         serverSide: false,
                         
-                        // Remove buttons and extra features
-                        dom: 'lfrtip', // Simple layout without buttons
+                        // Layout with ColumnControl for advanced filtering
+                        dom: 'Clfrtip',
+                        
+                        // ColumnControl configuration for advanced filtering
+                        columnControl: {
+                            order: ['search', 'order'],
+                            regenerate: true
+                        },
                         
                         // Language
                         language: {
