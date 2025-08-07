@@ -356,20 +356,14 @@ function getResultsWebviewContent(query, results, connection) {
             <div class="stat-item">
                 <span class="${statusClass}">${statusIcon}</span>
                 <span>${statusText}</span>
+                <span>•</span>
+                <span>⏱️ ${results.executionTime}</span>
+                <span>•</span>
+                <span>📊 ${results.rowCount}${results.totalRows && results.totalRows !== results.rowCount ? ` of ${results.totalRows}` : ''} rows</span>
+                <span>•</span>
+                <span>📋 ${results.columns.length} columns</span>
+                ${hasVisualization ? `<span>•</span><span>📈 ${chartType}</span>` : ''}
             </div>
-            <div class="stat-item">
-                <span>⏱️</span>
-                <span><strong>Time:</strong> ${results.executionTime}</span>
-            </div>
-            <div class="stat-item">
-                <span>📊</span>
-                <span><strong>Rows:</strong> ${results.rowCount}${results.totalRows && results.totalRows !== results.rowCount ? ` of ${results.totalRows}` : ''}</span>
-            </div>
-            <div class="stat-item">
-                <span>📋</span>
-                <span><strong>Columns:</strong> ${results.columns.length}</span>
-            </div>
-            ${hasVisualization ? `<div class="stat-item"><span>📈</span><span><strong>Chart:</strong> ${chartType}</span></div>` : ''}
         </div>
 
         ${hasVisualization ? `
@@ -543,10 +537,8 @@ function getResultsWebviewContent(query, results, connection) {
                 // Initialize simple DataTable like Kusto Explorer
                 try {
                     dataTable = $('#kusto-table').DataTable({
-                        // Basic options
-                        paging: true,
-                        pageLength: 100,
-                        lengthMenu: [[50, 100, 250, -1], [50, 100, 250, "All"]],
+                        // Remove pagination - show all rows
+                        paging: false,
                         
                         // Searching
                         searching: true,
@@ -567,8 +559,8 @@ function getResultsWebviewContent(query, results, connection) {
                         processing: false,
                         serverSide: false,
                         
-                        // Layout with ColumnControl for advanced filtering
-                        dom: 'Clfrtip',
+                        // Layout with ColumnControl for advanced filtering (removed length menu)
+                        dom: 'Cfrtip',
                         
                         // ColumnControl configuration for advanced filtering
                         columnControl: {
@@ -579,7 +571,6 @@ function getResultsWebviewContent(query, results, connection) {
                         // Language
                         language: {
                             search: "Search in results:",
-                            lengthMenu: "Show _MENU_ rows",
                             info: "Showing _START_ to _END_ of _TOTAL_ results",
                             paginate: {
                                 first: "First",
@@ -1219,6 +1210,43 @@ function getWebviewCSS() {
             overflow: auto;
             border: 1px solid var(--vscode-panel-border);
             border-radius: 4px;
+        }
+        
+        /* Custom scrollbar styling for better visibility */
+        .table-container::-webkit-scrollbar,
+        .dataTables_scrollBody::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        .table-container::-webkit-scrollbar-track,
+        .dataTables_scrollBody::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        
+        .table-container::-webkit-scrollbar-thumb,
+        .dataTables_scrollBody::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 6px;
+            border: 2px solid #f1f1f1;
+        }
+        
+        .table-container::-webkit-scrollbar-thumb:hover,
+        .dataTables_scrollBody::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        .table-container::-webkit-scrollbar-corner,
+        .dataTables_scrollBody::-webkit-scrollbar-corner {
+            background: #f1f1f1;
+        }
+        
+        /* For Firefox */
+        .table-container,
+        .dataTables_scrollBody {
+            scrollbar-width: auto;
+            scrollbar-color: #888 #f1f1f1;
         }
         .error-container {
             padding: 15px;

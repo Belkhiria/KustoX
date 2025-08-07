@@ -133,6 +133,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "kustox.testWithMockData",
+        "title": "Test with Mock Data",
+        "category": "KustoX",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "kustox.showConnectionStatus",
         "title": "Show Connection Status",
         "category": "KustoX",

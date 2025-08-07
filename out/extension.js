@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const connectionTreeProvider_1 = require("./connection/connectionTreeProvider");
 const connectionConfigurator_1 = require("./connection/connectionConfigurator");
 const queryExecutor_1 = require("./query/queryExecutor");
+const mockDataGenerator_1 = require("./mockData/mockDataGenerator");
 // Global connection state
 let kustoConnection = null;
 exports.kustoConnection = kustoConnection;
@@ -171,8 +172,69 @@ function activate(context) {
             vscode.window.showInformationMessage(`Table cache refreshed for ${item.item.database}`);
         }
     });
+    // Mock data command for testing UI without external database
+    const testWithMockDataCommand = vscode.commands.registerCommand('kustox.testWithMockData', async () => {
+        const options = [
+            { label: '$(table) Table Data (100 rows)', description: 'Mixed data types with realistic columns', value: 'table' },
+            { label: '$(graph-line) Time Series Data (50 rows)', description: 'Time-based metrics data', value: 'timeseries' },
+            { label: '$(shield) Security Data (75 rows)', description: 'Network security logs', value: 'security' },
+            { label: '$(symbol-misc) Random Data', description: 'Custom row/column count', value: 'random' }
+        ];
+        const selection = await vscode.window.showQuickPick(options, {
+            placeHolder: 'Select mock data type for testing'
+        });
+        if (!selection)
+            return;
+        let mockResult;
+        switch (selection.value) {
+            case 'table':
+                mockResult = mockDataGenerator_1.MockDataGenerator.generateTableData(100);
+                break;
+            case 'timeseries':
+                mockResult = mockDataGenerator_1.MockDataGenerator.generateTimeSeriesData(50);
+                break;
+            case 'security':
+                mockResult = mockDataGenerator_1.MockDataGenerator.generateSecurityData(75);
+                break;
+            case 'random':
+                const rowInput = await vscode.window.showInputBox({
+                    prompt: 'Number of rows',
+                    value: '100',
+                    validateInput: (value) => {
+                        const num = parseInt(value);
+                        return (isNaN(num) || num < 1 || num > 10000) ? 'Enter a number between 1 and 10000' : undefined;
+                    }
+                });
+                if (!rowInput)
+                    return;
+                const colInput = await vscode.window.showInputBox({
+                    prompt: 'Number of columns',
+                    value: '10',
+                    validateInput: (value) => {
+                        const num = parseInt(value);
+                        return (isNaN(num) || num < 1 || num > 50) ? 'Enter a number between 1 and 50' : undefined;
+                    }
+                });
+                if (!colInput)
+                    return;
+                mockResult = mockDataGenerator_1.MockDataGenerator.generateRandomData(parseInt(rowInput), parseInt(colInput));
+                break;
+            default:
+                return;
+        }
+        // Create mock connection for display
+        const mockConnection = {
+            cluster: 'https://localhost-mock.kusto.windows.net',
+            database: 'MockTestData',
+            client: null // Mock client
+        };
+        // Import and use webview manager
+        const { showQueryResults } = await Promise.resolve().then(() => __importStar(require('./webview/webviewManager')));
+        showQueryResults('MockQuery | take 100', mockResult, mockConnection, 'Mock Data Test');
+        vscode.window.showInformationMessage(`Mock data generated: ${mockResult.rowCount} rows, ${mockResult.columns.length} columns`);
+    });
     // Push all commands to subscriptions
-    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand);
+    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand);
     // Show a welcome message when the extension activates
     vscode.window.showInformationMessage('KustoX extension loaded! Use "KustoX: Configure Connection" to connect to your cluster.');
 }

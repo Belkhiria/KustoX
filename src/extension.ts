@@ -3,6 +3,7 @@ import { ConnectionTreeProvider, ConnectionTreeItem } from './connection/connect
 import { ConnectionConfigurator } from './connection/connectionConfigurator';
 import { QueryExecutor } from './query/queryExecutor';
 import { KustoConnection } from './types';
+import { MockDataGenerator } from './mockData/mockDataGenerator';
 
 // Global connection state
 let kustoConnection: KustoConnection | null = null;
@@ -177,6 +178,72 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Mock data command for testing UI without external database
+    const testWithMockDataCommand = vscode.commands.registerCommand('kustox.testWithMockData', async () => {
+        const options = [
+            { label: '$(table) Table Data (100 rows)', description: 'Mixed data types with realistic columns', value: 'table' },
+            { label: '$(graph-line) Time Series Data (50 rows)', description: 'Time-based metrics data', value: 'timeseries' },
+            { label: '$(shield) Security Data (75 rows)', description: 'Network security logs', value: 'security' },
+            { label: '$(symbol-misc) Random Data', description: 'Custom row/column count', value: 'random' }
+        ];
+
+        const selection = await vscode.window.showQuickPick(options, {
+            placeHolder: 'Select mock data type for testing'
+        });
+
+        if (!selection) return;
+
+        let mockResult;
+        switch (selection.value) {
+            case 'table':
+                mockResult = MockDataGenerator.generateTableData(100);
+                break;
+            case 'timeseries':
+                mockResult = MockDataGenerator.generateTimeSeriesData(50);
+                break;
+            case 'security':
+                mockResult = MockDataGenerator.generateSecurityData(75);
+                break;
+            case 'random':
+                const rowInput = await vscode.window.showInputBox({
+                    prompt: 'Number of rows',
+                    value: '100',
+                    validateInput: (value) => {
+                        const num = parseInt(value);
+                        return (isNaN(num) || num < 1 || num > 10000) ? 'Enter a number between 1 and 10000' : undefined;
+                    }
+                });
+                if (!rowInput) return;
+
+                const colInput = await vscode.window.showInputBox({
+                    prompt: 'Number of columns',
+                    value: '10',
+                    validateInput: (value) => {
+                        const num = parseInt(value);
+                        return (isNaN(num) || num < 1 || num > 50) ? 'Enter a number between 1 and 50' : undefined;
+                    }
+                });
+                if (!colInput) return;
+
+                mockResult = MockDataGenerator.generateRandomData(parseInt(rowInput), parseInt(colInput));
+                break;
+            default:
+                return;
+        }
+
+        // Create mock connection for display
+        const mockConnection: KustoConnection = {
+            cluster: 'https://localhost-mock.kusto.windows.net',
+            database: 'MockTestData',
+            client: null // Mock client
+        };
+
+        // Import and use webview manager
+        const { showQueryResults } = await import('./webview/webviewManager');
+        showQueryResults('MockQuery | take 100', mockResult, mockConnection, 'Mock Data Test');
+        vscode.window.showInformationMessage(`Mock data generated: ${mockResult.rowCount} rows, ${mockResult.columns.length} columns`);
+    });
+
     // Push all commands to subscriptions
     context.subscriptions.push(
         openExplorer, 
@@ -192,7 +259,8 @@ export function activate(context: vscode.ExtensionContext) {
         removeClusterCommand,
         copyConnectionStringCommand,
         insertTableNameCommand,
-        refreshTablesCommand
+        refreshTablesCommand,
+        testWithMockDataCommand
     );
 
     // Show a welcome message when the extension activates
