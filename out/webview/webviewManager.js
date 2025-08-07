@@ -247,6 +247,83 @@ function getResultsWebviewContent(query, results, connection) {
                 color: #ffffff !important;
                 border-color: #0066cc !important;
             }
+            
+            /* Cell detail panel styling */
+            .cell-detail-panel {
+                margin-top: 15px;
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 15px;
+                display: none;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .cell-detail-panel.visible {
+                display: block;
+            }
+            
+            .cell-detail-header {
+                background-color: #f8f9fa;
+                color: #495057;
+                padding: 8px 12px;
+                margin: -15px -15px 10px -15px;
+                border-bottom: 1px solid #dee2e6;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 4px 4px 0 0;
+            }
+            
+            .cell-detail-content {
+                font-family: 'Cascadia Code', 'Courier New', monospace;
+                font-size: 13px;
+                color: #212529;
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 3px;
+                padding: 10px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                max-height: 300px;
+                overflow-y: auto;
+                line-height: 1.4;
+            }
+            
+            .cell-detail-actions {
+                margin-top: 10px;
+                display: flex;
+                gap: 10px;
+            }
+            
+            .cell-detail-button {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                padding: 5px 12px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            
+            .cell-detail-button:hover {
+                background-color: #005a9e;
+            }
+            
+            .cell-detail-button.secondary {
+                background-color: #6c757d;
+            }
+            
+            .cell-detail-button.secondary:hover {
+                background-color: #545b62;
+            }
+            
+            /* Table cell selection styling */
+            table.dataTable tbody td.cell-selected {
+                background-color: #e3f2fd !important;
+                border: 2px solid #0066cc !important;
+                box-shadow: inset 0 0 0 1px #0066cc;
+            }
         </style>
     </head>
     <body>
@@ -293,6 +370,20 @@ function getResultsWebviewContent(query, results, connection) {
                     ${tableRows}
                 </tbody>
             </table>
+            
+            <!-- Cell Detail Panel -->
+            <div id="cell-detail-panel" class="cell-detail-panel">
+                <div class="cell-detail-header">
+                    <span id="cell-detail-title">Cell Content Details</span>
+                </div>
+                <div class="cell-detail-content" id="cell-detail-content">
+                    Click on any table cell to view its content here...
+                </div>
+                <div class="cell-detail-actions">
+                    <button class="cell-detail-button" onclick="copyCellContent()">📋 Copy Content</button>
+                    <button class="cell-detail-button secondary" onclick="closeCellDetail()">✕ Close</button>
+                </div>
+            </div>
         </div>
         ` : `
         <table id="kusto-table" class="display nowrap" style="width:100%">
@@ -303,6 +394,20 @@ function getResultsWebviewContent(query, results, connection) {
                 ${tableRows}
             </tbody>
         </table>
+        
+        <!-- Cell Detail Panel -->
+        <div id="cell-detail-panel" class="cell-detail-panel">
+            <div class="cell-detail-header">
+                <span id="cell-detail-title">Cell Content Details</span>
+            </div>
+            <div class="cell-detail-content" id="cell-detail-content">
+                Click on any table cell to view its content here...
+            </div>
+            <div class="cell-detail-actions">
+                <button class="cell-detail-button" onclick="copyCellContent()">📋 Copy Content</button>
+                <button class="cell-detail-button secondary" onclick="closeCellDetail()">✕ Close</button>
+            </div>
+        </div>
         `}
 
         <script>
@@ -473,6 +578,25 @@ function getResultsWebviewContent(query, results, connection) {
                     });
                     
                     console.log('✅ DataTables initialized successfully with', columns.length, 'columns');
+                    
+                    // Add cell click functionality for detail panel
+                    $('#kusto-table tbody').on('click', 'td', function() {
+                        // Remove previous selection
+                        $('#kusto-table tbody td').removeClass('cell-selected');
+                        
+                        // Add selection to clicked cell
+                        $(this).addClass('cell-selected');
+                        
+                        // Get cell data
+                        const cellData = dataTable.cell(this).data();
+                        const columnIndex = dataTable.cell(this).index().column;
+                        const rowIndex = dataTable.cell(this).index().row;
+                        const columnName = columns[columnIndex];
+                        
+                        // Show detail panel
+                        showCellDetail(cellData, columnName, rowIndex + 1, columnIndex + 1);
+                    });
+                    
                 } catch (error) {
                     console.error('❌ Failed to initialize DataTables:', error);
                     console.log('Falling back to basic table display');
@@ -500,6 +624,68 @@ function getResultsWebviewContent(query, results, connection) {
                 if (tabName === 'table' && !dataTable) {
                     setTimeout(initializeDataTable, 100);
                 }
+            }
+            
+            // Cell detail panel functions
+            let currentCellContent = '';
+            
+            function showCellDetail(cellData, columnName, rowNumber, columnNumber) {
+                const detailPanel = document.getElementById('cell-detail-panel');
+                const detailTitle = document.getElementById('cell-detail-title');
+                const detailContent = document.getElementById('cell-detail-content');
+                
+                // Store current content for copy functionality
+                currentCellContent = cellData || '';
+                
+                // Format the display content
+                let displayContent = cellData;
+                if (cellData === null || cellData === undefined) {
+                    displayContent = '[NULL]';
+                } else if (cellData === '') {
+                    displayContent = '[EMPTY STRING]';
+                } else {
+                    displayContent = cellData.toString();
+                }
+                
+                // Update panel content
+                detailTitle.textContent = columnName + ' (Row ' + rowNumber + ', Column ' + columnNumber + ')';
+                detailContent.textContent = displayContent;
+                
+                // Show the panel with animation
+                detailPanel.classList.add('visible');
+                
+                // Scroll to panel
+                detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            
+            function copyCellContent() {
+                if (currentCellContent) {
+                    navigator.clipboard.writeText(currentCellContent.toString()).then(function() {
+                        // Visual feedback
+                        const button = event.target;
+                        const originalText = button.textContent;
+                        button.textContent = '✅ Copied!';
+                        button.style.backgroundColor = '#28a745';
+                        
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.style.backgroundColor = '#0078d4';
+                        }, 1500);
+                    }).catch(function() {
+                        alert('Failed to copy content to clipboard');
+                    });
+                }
+            }
+            
+            function closeCellDetail() {
+                const detailPanel = document.getElementById('cell-detail-panel');
+                detailPanel.classList.remove('visible');
+                
+                // Remove cell selection
+                $('#kusto-table tbody td').removeClass('cell-selected');
+                
+                // Clear current content
+                currentCellContent = '';
             }
             
             // Initialize DataTable on DOM ready
