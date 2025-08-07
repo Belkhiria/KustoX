@@ -145,33 +145,195 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
             /* Context menu styling */
             .context-menu {
                 position: absolute;
-                background: white;
-                border: 1px solid #ccc;
-                box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+                background: #ffffff;
+                border: 2px solid #0078d4;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.3);
                 z-index: 1000;
-                min-width: 200px;
-                font-family: Arial, sans-serif;
-                font-size: 12px;
+                min-width: 180px;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 13px;
+                border-radius: 4px;
+                overflow: hidden;
             }
             
             .context-menu-item {
-                padding: 8px 12px;
+                padding: 10px 16px;
                 cursor: pointer;
-                border-bottom: 1px solid #eee;
+                border-bottom: 1px solid #e1e5e9;
+                color: #212529;
+                transition: all 0.2s ease;
+                font-weight: 500;
             }
             
             .context-menu-item:hover {
                 background-color: #0078d4;
-                color: white;
+                color: #ffffff;
             }
             
             .context-menu-item:last-child {
                 border-bottom: none;
             }
             
-            /* Remove DataTables export buttons and other controls */
-            .dt-buttons, .dataTables_filter, .dataTables_length {
+            /* Hide some DataTables controls but keep buttons for column visibility */
+            .dataTables_filter, .dataTables_length {
                 display: none;
+            }
+            
+            /* Style DataTables buttons */
+            .dt-buttons {
+                margin-bottom: 10px;
+            }
+            
+            .dt-button {
+                background-color: #ffffff;
+                border: 1px solid #0078d4;
+                color: #0078d4;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                margin-right: 5px;
+                transition: all 0.2s ease;
+            }
+            
+            .dt-button:hover {
+                background-color: #0078d4;
+                color: #ffffff;
+            }
+            
+            .dt-button-collection {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                border-radius: 4px;
+                max-height: 400px;
+                overflow-y: auto;
+                z-index: 9999;
+                position: absolute;
+            }
+            
+            /* Enhanced scrollbar for column visibility dropdown */
+            .dt-button-collection::-webkit-scrollbar {
+                width: 14px;
+            }
+            
+            .dt-button-collection::-webkit-scrollbar-track {
+                background: #f8f9fa;
+                border-radius: 7px;
+                border: 1px solid #e9ecef;
+            }
+            
+            .dt-button-collection::-webkit-scrollbar-thumb {
+                background: #6c757d;
+                border-radius: 7px;
+                border: 2px solid #f8f9fa;
+            }
+            
+            .dt-button-collection::-webkit-scrollbar-thumb:hover {
+                background: #495057;
+            }
+            
+            .dt-button-collection::-webkit-scrollbar-thumb:active {
+                background: #343a40;
+            }
+            
+            .dt-button-collection::-webkit-scrollbar-corner {
+                background: #f8f9fa;
+            }
+            
+            /* For Firefox */
+            .dt-button-collection {
+                scrollbar-width: auto;
+                scrollbar-color: #6c757d #f8f9fa;
+            }
+            
+            /* Ensure dropdowns are not clipped by container */
+            .dt-buttons {
+                position: relative;
+                z-index: 1000;
+            }
+            
+            .dataTables_wrapper {
+                overflow: visible;
+            }
+            
+            /* Ensure column control container allows overflow */
+            .dt-columncontrol {
+                position: relative;
+                z-index: 1000;
+            }
+            
+            .dt-button-collection .dt-button {
+                display: block;
+                width: 100%;
+                text-align: left;
+                border: none;
+                border-bottom: 1px solid #eee;
+                border-radius: 0;
+                margin: 0;
+                background: #ffffff !important;
+                color: #212529 !important;
+                font-size: 13px !important;
+                font-weight: 500 !important;
+                padding: 10px 16px !important;
+                line-height: 1.4 !important;
+            }
+            
+            .dt-button-collection .dt-button:hover {
+                background-color: #f8f9fa !important;
+                color: #212529 !important;
+            }
+            
+            .dt-button-collection .dt-button:focus {
+                outline: 2px solid #0078d4 !important;
+                background-color: #e3f2fd !important;
+                color: #212529 !important;
+            }
+            
+            .dt-button-collection .dt-button:last-child {
+                border-bottom: none;
+            }
+            
+            /* Additional specificity for column visibility text */
+            .dt-button-collection .dt-button span,
+            .dt-button-collection .dt-button::before,
+            .dt-button-collection .dt-button::after {
+                color: #212529 !important;
+            }
+            
+            /* Ensure all DataTables buttons and dropdown items are visible */
+            .dt-buttons .dt-button,
+            .dt-button-collection,
+            .dt-button-collection .dt-button,
+            .buttons-colvis,
+            .buttons-columnVisibility {
+                color: #212529 !important;
+                background-color: #ffffff !important;
+            }
+            
+            /* Override any inherited text color issues including VS Code theme variables */
+            .dt-button-collection .dt-button * {
+                color: inherit !important;
+            }
+            
+            /* Force column names to be visible regardless of VS Code theme */
+            .dt-button-collection .dt-button,
+            .dt-button-collection .dt-button:not(:hover):not(:focus) {
+                color: #212529 !important;
+                background-color: #ffffff !important;
+                text-shadow: none !important;
+                opacity: 1 !important;
+            }
+            
+            /* Ensure text is always visible in any VS Code theme */
+            .dt-button-collection .dt-button::before,
+            .dt-button-collection .dt-button::after,
+            .dt-button-collection .dt-button span,
+            .dt-button-collection .dt-button label,
+            .dt-button-collection .dt-button input + label {
+                color: #212529 !important;
+                background: transparent !important;
             }
             
             /* ColumnControl styling - Light Theme */
@@ -195,10 +357,47 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 background-color: #ffffff;
                 border: 1px solid #ced4da;
                 color: #495057;
-                max-height: 200px;
+                max-height: 400px;
                 overflow-y: auto;
                 border-radius: 3px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                z-index: 9999;
+                position: absolute;
+            }
+            
+            /* Enhanced scrollbar for column filter dropdown */
+            .dt-columncontrol-searchList::-webkit-scrollbar {
+                width: 14px;
+            }
+            
+            .dt-columncontrol-searchList::-webkit-scrollbar-track {
+                background: #f8f9fa;
+                border-radius: 7px;
+                border: 1px solid #e9ecef;
+            }
+            
+            .dt-columncontrol-searchList::-webkit-scrollbar-thumb {
+                background: #6c757d;
+                border-radius: 7px;
+                border: 2px solid #f8f9fa;
+            }
+            
+            .dt-columncontrol-searchList::-webkit-scrollbar-thumb:hover {
+                background: #495057;
+            }
+            
+            .dt-columncontrol-searchList::-webkit-scrollbar-thumb:active {
+                background: #343a40;
+            }
+            
+            .dt-columncontrol-searchList::-webkit-scrollbar-corner {
+                background: #f8f9fa;
+            }
+            
+            /* For Firefox */
+            .dt-columncontrol-searchList {
+                scrollbar-width: auto;
+                scrollbar-color: #6c757d #f8f9fa;
             }
             
             .dt-columncontrol-searchList-item {
@@ -553,14 +752,26 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                         processing: false,
                         serverSide: false,
                         
-                        // Layout with ColumnControl for advanced filtering (removed length menu)
-                        dom: 'Cfrtip',
+                        // Layout with ColumnControl for advanced filtering and column visibility
+                        dom: 'BCfrtip',
                         
                         // ColumnControl configuration for advanced filtering
                         columnControl: {
                             order: ['search', 'order'],
                             regenerate: true
                         },
+                        
+                        // Buttons configuration for column visibility
+                        buttons: [
+                            {
+                                extend: 'colvis',
+                                text: 'Column Visibility',
+                                className: 'btn btn-secondary',
+                                postfixButtons: ['colvisRestore'],
+                                collectionLayout: 'fixed columns',
+                                collectionTitle: 'Column visibility control'
+                            }
+                        ],
                         
                         // Language
                         language: {
@@ -576,6 +787,8 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                     });
                     
                     console.log('✅ DataTables initialized successfully');
+                    console.log('📊 Total columns in DataTable:', dataTable.columns().count());
+                    console.log('📊 Column headers:', dataTable.columns().header().toArray().map(h => h.textContent));
                     
                     // Add cell selection like Kusto Explorer
                     let isSelecting = false;
