@@ -42,7 +42,7 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
     const hasVisualization = chartType && ['columnchart', 'barchart', 'piechart', 'timechart', 'linechart', 'areachart', 'scatterchart'].includes(chartType);
 
     const tableRows = results.rows.map((row: any[], rowIndex: number) => 
-        `<tr data-row="${rowIndex}">${row.map((cell: any, cellIndex: number) => `<td data-column="${cellIndex}" data-value="${cell}" title="${cell}"><div class="row-resize-handle"></div>${cell}</td>`).join('')}</tr>`
+        `<tr>${row.map((cell: any, cellIndex: number) => `<td>${cell}</td>`).join('')}</tr>`
     ).join('');
 
     const statusClass = results.hasData ? 'success' : 'warning';
@@ -58,9 +58,74 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Kusto Query Results</title>
+        
+        <!-- DataTables CSS -->
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+        <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+        <link rel="stylesheet" href="https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css">
+        
+        <!-- jQuery (required by DataTables) -->
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        
+        <!-- DataTables Core JS -->
+        <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+        
+        <!-- DataTables Extensions -->
+        <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script>
+        <script src="https://cdn.datatables.net/select/1.7.0/js/dataTables.select.min.js"></script>
+ <!-- Export dependencies -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+        
+        <!-- Chart.js for visualization -->
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        
         <style>
             ${getWebviewCSS()}
+            
+            /* Additional DataTables styling for Kusto results */
+            .dataTables_wrapper {
+                margin-top: 20px;
+            }
+            
+            table.dataTable thead th {
+                background-color: #f0f0f0;
+                font-weight: 600;
+                border-bottom: 2px solid #ddd;
+            }
+            
+            table.dataTable tbody td {
+                font-family: 'Cascadia Code', 'Courier New', monospace;
+                font-size: 13px;
+            }
+            
+            /* Highlight timestamp columns */
+            table.dataTable tbody td.timestamp-column {
+                color: #0066cc;
+                font-weight: 500;
+            }
+            
+            /* Export buttons styling */
+            .dt-buttons {
+                margin-bottom: 10px;
+            }
+            
+            .dt-button {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                padding: 5px 15px;
+                margin-right: 5px;
+                cursor: pointer;
+                border-radius: 3px;
+            }
+            
+            .dt-button:hover {
+                background-color: #005a9e;
+            }
         </style>
     </head>
     <body>
@@ -99,31 +164,186 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
         </div>
 
         <div id="table-tab" class="tab-content">
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>${results.columns.map((col: string, index: number) => `<th data-column="${index}" class="sortable">${col}<span class="sort-indicator"></span><div class="resize-handle"></div></th>`).join('')}</tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        ` : `
-        <div class="table-container">
-            <table>
+            <table id="kusto-table" class="display nowrap" style="width:100%">
                 <thead>
-                    <tr>${results.columns.map((col: string, index: number) => `<th data-column="${index}" class="sortable">${col}<span class="sort-indicator"></span><div class="resize-handle"></div></th>`).join('')}</tr>
+                    <tr>${results.columns.map((col: string) => `<th>${col}</th>`).join('')}</tr>
                 </thead>
                 <tbody>
                     ${tableRows}
                 </tbody>
             </table>
         </div>
+        ` : `
+        <table id="kusto-table" class="display nowrap" style="width:100%">
+            <thead>
+                <tr>${results.columns.map((col: string) => `<th>${col}</th>`).join('')}</tr>
+            </thead>
+            <tbody>
+                ${tableRows}
+            </tbody>
+        </table>
         `}
 
         <script>
+            let dataTable = null;
+            
+            // Detect column types based on data
+            function detectColumnTypes(data, columns) {
+                const columnTypes = {};
+                
+                columns.forEach((col, index) => {
+                    let isDate = true;
+                    let isNumber = true;
+                    
+                    // Check first 10 rows to determine column type
+                    for (let i = 0; i < Math.min(10, data.length); i++) {
+                        const value = data[i][index];
+                        if (value !== null && value !== undefined && value !== '') {
+                            // Check if it's a date (ISO format or common date patterns)
+                            if (isDate && !((/^\\d{4}-\\d{2}-\\d{2}/.test(value.toString())) || 
+                                           (/^\\d{1,2}\\/\\d{1,2}\\/\\d{4}/.test(value.toString())) ||
+                                           (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/.test(value.toString())))) {
+                                isDate = false;
+                            }
+                            // Check if it's a number
+                            if (isNumber && (isNaN(value) || !isFinite(value))) {
+                                isNumber = false;
+                            }
+                        }
+                    }
+                    
+                    if (isDate) {
+                        columnTypes[index] = 'date';
+                    } else if (isNumber) {
+                        columnTypes[index] = 'num';
+                    } else {
+                        columnTypes[index] = 'string';
+                    }
+                });
+                
+                return columnTypes;
+            }
+            
+            function initializeDataTable() {
+                // Check if DataTables is loaded
+                if (typeof $ === 'undefined' || typeof $.fn.dataTable === 'undefined') {
+                    console.warn('DataTables not loaded, falling back to basic table');
+                    return;
+                }
+                
+                console.log('Initializing DataTable...');
+                console.log('Table element exists:', $('#kusto-table').length > 0);
+                
+                // Get table data for column type detection
+                const tableData = [];
+                $('#kusto-table tbody tr').each(function() {
+                    const rowData = [];
+                    $(this).find('td').each(function() {
+                        rowData.push($(this).text());
+                    });
+                    tableData.push(rowData);
+                });
+                
+                const columns = [];
+                $('#kusto-table thead th').each(function() {
+                    columns.push($(this).text());
+                });
+                
+                console.log('Found', tableData.length, 'rows and', columns.length, 'columns');
+                
+                const columnTypes = detectColumnTypes(tableData, columns);
+                
+                // Build simple column definitions for performance
+                const columnDefs = [];
+                
+                // Add timestamp class to date columns only
+                columns.forEach((col, index) => {
+                    if (columnTypes[index] === 'date') {
+                        columnDefs.push({
+                            targets: index,
+                            className: 'timestamp-column'
+                        });
+                    }
+                });
+                
+                // Initialize DataTable with configuration
+                try {
+                    dataTable = $('#kusto-table').DataTable({
+                        // Basic options - optimized for performance
+                        paging: true,
+                        pageLength: 50,  // Reduced from 100 for better performance
+                        lengthMenu: [[25, 50, 100, 250, -1], [25, 50, 100, 250, "All"]],
+                        
+                        // Searching
+                        searching: true,
+                        search: {
+                            smart: true,
+                            regex: false
+                        },
+                        
+                        // Sorting
+                        ordering: true,
+                        order: [], // No default sorting, preserve Kusto's order
+                        
+                        // Scrolling
+                        scrollX: true,
+                        scrollY: '60vh',
+                        scrollCollapse: true,
+                        
+                        // Performance optimizations
+                        deferRender: true,
+                        processing: false,
+                        serverSide: false,
+                        
+                        // Column definitions
+                        columnDefs: columnDefs,
+                        
+                        // Simplified buttons (removed SearchPanes for performance)
+                        dom: 'Bfrtip',
+                        buttons: [
+                            {
+                                extend: 'copy',
+                                text: '📋 Copy',
+                                className: 'dt-button-copy'
+                            },
+                            {
+                                extend: 'csv',
+                                text: '📄 CSV',
+                                className: 'dt-button-csv'
+                            },
+                            {
+                                extend: 'excel',
+                                text: '📊 Excel',
+                                className: 'dt-button-excel'
+                            },
+                            {
+                                extend: 'colvis',
+                                text: '👁️ Columns',
+                                className: 'dt-button-colvis'
+                            }
+                        ],
+                        
+                        // Language
+                        language: {
+                            search: "Search in results:",
+                            lengthMenu: "Show _MENU_ rows",
+                            info: "Showing _START_ to _END_ of _TOTAL_ results",
+                            paginate: {
+                                first: "First",
+                                last: "Last",
+                                next: "Next",
+                                previous: "Previous"
+                            }
+                        }
+                    });
+                    
+                    console.log('✅ DataTables initialized successfully with', columns.length, 'columns');
+                } catch (error) {
+                    console.error('❌ Failed to initialize DataTables:', error);
+                    console.log('Falling back to basic table display');
+                }
+            }
+
             function showTab(tabName) {
                 // Hide all tab contents
                 document.querySelectorAll('.tab-content').forEach(content => {
@@ -140,243 +360,38 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                 
                 // Add active class to clicked button
                 event.target.classList.add('active');
-            }
-
-            // Column resize functionality
-            let isResizing = false;
-            let currentColumn = null;
-            let currentHandle = null;
-            let startX = 0;
-            let startWidth = 0;
-
-            // Row resize functionality
-            let isRowResizing = false;
-            let currentRow = null;
-            let currentRowHandle = null;
-            let startY = 0;
-            let startHeight = 0;
-
-            // Sorting state
-            let currentSort = { column: -1, direction: 'none' };
-
-            function sortTable(columnIndex, table) {
-                const tbody = table.querySelector('tbody');
-                const rows = Array.from(tbody.querySelectorAll('tr'));
                 
-                // Determine sort direction
-                let direction = 'asc';
-                if (currentSort.column === columnIndex) {
-                    if (currentSort.direction === 'asc') {
-                        direction = 'desc';
-                    } else if (currentSort.direction === 'desc') {
-                        direction = 'asc';
-                    }
-                } else {
-                    direction = 'asc';
+                // Initialize DataTable when switching to table tab
+                if (tabName === 'table' && !dataTable) {
+                    setTimeout(initializeDataTable, 100);
                 }
-                
-                // Update sort state
-                currentSort = { column: columnIndex, direction: direction };
-                
-                // Update header indicators
-                const headers = table.querySelectorAll('th');
-                headers.forEach((header, index) => {
-                    header.classList.remove('sort-asc', 'sort-desc');
-                    if (index === columnIndex) {
-                        header.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                    }
-                });
-                
-                // Sort rows
-                rows.sort((a, b) => {
-                    const cellA = a.querySelector('td[data-column="' + columnIndex + '"]');
-                    const cellB = b.querySelector('td[data-column="' + columnIndex + '"]');
-                    
-                    if (!cellA || !cellB) return 0;
-                    
-                    const valueA = cellA.getAttribute('data-value') || cellA.textContent;
-                    const valueB = cellB.getAttribute('data-value') || cellB.textContent;
-                    
-                    let comparison = 0;
-                    
-                    const valueAStr = valueA.toString().trim();
-                    const valueBStr = valueB.toString().trim();
-                    
-                    console.log('Comparing values:', valueAStr, 'vs', valueBStr);
-                    
-                    // Try to parse as dates first
-                    const dateA = new Date(valueAStr);
-                    const dateB = new Date(valueBStr);
-                    
-                    // Check if both parsed as valid dates
-                    if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-                        console.log('Sorting as dates:', dateA, 'vs', dateB);
-                        comparison = dateA.getTime() - dateB.getTime();
-                        console.log('Date comparison result:', comparison);
-                    } else {
-                        // Try numeric comparison first
-                        const numA = parseFloat(valueAStr);
-                        const numB = parseFloat(valueBStr);
-                        
-                        if (!isNaN(numA) && !isNaN(numB) && 
-                            isFinite(numA) && isFinite(numB)) {
-                            comparison = numA - numB;
-                        } else {
-                            // String comparison
-                            comparison = valueAStr.localeCompare(valueBStr, undefined, { numeric: true });
-                        }
-                    }
-                    
-                    return direction === 'asc' ? comparison : -comparison;
-                });
-                
-                // Reorder DOM
-                tbody.innerHTML = '';
-                rows.forEach(row => tbody.appendChild(row));
             }
+            
+            // Initialize DataTable on DOM ready
+            $(document).ready(function() {
+                // Check if we're showing the table tab initially
+                const chartTab = document.getElementById('chart-tab');
+                if (!chartTab || !chartTab.classList.contains('active')) {
+                    initializeDataTable();
+                }
+            });
+            
+            // Handle window resize
+            $(window).on('resize', function() {
+                if (dataTable) {
+                    dataTable.columns.adjust();
+                }
+            });
 
-            function initializeResizing() {
-                // Add sorting functionality to column headers
-                document.querySelectorAll('th.sortable').forEach((header, index) => {
-                    header.addEventListener('click', function(e) {
-                        // Don't sort if clicking on resize handle
-                        if (e.target.classList.contains('resize-handle')) {
-                            return;
-                        }
-                        
-                        const columnIndex = parseInt(this.getAttribute('data-column'));
-                        const table = this.closest('table');
-                        sortTable(columnIndex, table);
-                        
-                        e.preventDefault();
-                        e.stopPropagation();
-                    });
-                });
 
-                // Add resize functionality to all resize handles
-                document.querySelectorAll('.resize-handle').forEach((handle, index) => {
-                    handle.addEventListener('mousedown', function(e) {
-                        console.log('Resize handle clicked:', index);
-                        isResizing = true;
-                        currentColumn = this.parentElement;
-                        currentHandle = this;
-                        startX = e.clientX;
-                        // Get the current width, not the computed style which might be auto
-                        startWidth = currentColumn.offsetWidth;
-                        
-                        currentColumn.classList.add('resizing');
-                        document.body.style.cursor = 'col-resize';
-                        document.body.style.userSelect = 'none';
-                        
-                        e.preventDefault();
-                        e.stopPropagation();
-                    });
-                });
-
-                // Add row resize functionality
-                document.querySelectorAll('.row-resize-handle').forEach((handle, index) => {
-                    handle.addEventListener('mousedown', function(e) {
-                        console.log('Row resize handle clicked:', index);
-                        isRowResizing = true;
-                        currentRow = this.closest('tr');
-                        currentRowHandle = this;
-                        startY = e.clientY;
-                        startHeight = currentRow.offsetHeight;
-                        
-                        currentRow.classList.add('resizing');
-                        document.body.style.cursor = 'row-resize';
-                        document.body.style.userSelect = 'none';
-                        
-                        e.preventDefault();
-                        e.stopPropagation();
-                    });
-                });
-
-                document.addEventListener('mousemove', function(e) {
-                    // Column resizing
-                    if (isResizing && currentColumn) {
-                        const deltaX = e.clientX - startX;
-                        const newWidth = startWidth + deltaX;
-                        
-                        if (newWidth > 30) { // Very small minimum width
-                            currentColumn.style.width = newWidth + 'px';
-                            currentColumn.style.minWidth = newWidth + 'px';
-                            currentColumn.style.maxWidth = newWidth + 'px';
-                            
-                            // Add expanded class to enable text wrapping
-                            currentColumn.classList.add('expanded');
-                            
-                            // Update corresponding data cells in this column
-                            const columnIndex = Array.from(currentColumn.parentNode.children).indexOf(currentColumn);
-                            const table = currentColumn.closest('table');
-                            const dataCells = table.querySelectorAll('tbody tr td:nth-child(' + (columnIndex + 1) + ')');
-                            dataCells.forEach(cell => {
-                                cell.style.width = newWidth + 'px';
-                                cell.style.minWidth = newWidth + 'px';
-                                cell.style.maxWidth = newWidth + 'px';
-                                cell.classList.add('expanded');
-                            });
-                        }
-                        e.preventDefault();
-                    }
-                    
-                    // Row resizing
-                    if (isRowResizing && currentRow) {
-                        const deltaY = e.clientY - startY;
-                        const newHeight = startHeight + deltaY;
-                        
-                        if (newHeight > 20) { // Minimum row height
-                            currentRow.style.height = newHeight + 'px';
-                            
-                            // Update all cells in this row and add expanded class
-                            const cells = currentRow.querySelectorAll('td');
-                            cells.forEach(cell => {
-                                cell.style.height = newHeight + 'px';
-                                cell.style.maxHeight = newHeight + 'px';
-                                cell.classList.add('expanded');
-                            });
-                        }
-                        e.preventDefault();
-                    }
-                });
-
-                document.addEventListener('mouseup', function(e) {
-                    if (isResizing) {
-                        console.log('Column resize ended');
-                        isResizing = false;
-                        if (currentColumn) {
-                            currentColumn.classList.remove('resizing');
-                        }
-                        document.body.style.cursor = '';
-                        document.body.style.userSelect = '';
-                        currentColumn = null;
-                        currentHandle = null;
-                    }
-                    
-                    if (isRowResizing) {
-                        console.log('Row resize ended');
-                        isRowResizing = false;
-                        if (currentRow) {
-                            currentRow.classList.remove('resizing');
-                        }
-                        document.body.style.cursor = '';
-                        document.body.style.userSelect = '';
-                        currentRow = null;
-                        currentRowHandle = null;
-                    }
-                });
-
-                // Prevent text selection during resize
-                document.addEventListener('selectstart', function(e) {
-                    if (isResizing || isRowResizing) {
-                        e.preventDefault();
-                    }
-                });
-            }
 
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('DOM loaded, initializing resize functionality');
-                initializeResizing();
+                console.log('DOM loaded, initializing DataTables');
+                // Check if we're showing the table tab initially
+                const chartTab = document.getElementById('chart-tab');
+                if (!chartTab || !chartTab.classList.contains('active')) {
+                    initializeDataTable();
+                }
             });
         </script>
     </body>
@@ -568,12 +583,6 @@ function getWebviewCSS(): string {
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        th.expanded, td.expanded {
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            white-space: normal;
-            overflow: visible;
-        }
         th {
             background-color: var(--vscode-panel-background);
             font-weight: 600;
@@ -581,70 +590,6 @@ function getWebviewCSS(): string {
             top: 0;
             z-index: 10;
             user-select: none;
-        }
-        th.sortable {
-            cursor: pointer;
-            position: relative;
-        }
-        th.sortable:hover {
-            background-color: var(--vscode-list-hoverBackground);
-        }
-        .sort-indicator {
-            position: absolute;
-            right: 25px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        th.sort-asc .sort-indicator::after {
-            content: '▲';
-            color: var(--vscode-charts-blue);
-        }
-        th.sort-desc .sort-indicator::after {
-            content: '▼';
-            color: var(--vscode-charts-blue);
-        }
-        th.sortable:hover .sort-indicator::after {
-            content: '↕';
-            color: var(--vscode-foreground);
-        }
-        .resize-handle {
-            position: absolute;
-            top: 0;
-            right: -2px;
-            width: 8px;
-            height: 100%;
-            cursor: col-resize;
-            background: transparent;
-            border-right: 1px solid var(--vscode-panel-border);
-            z-index: 20;
-        }
-        .resize-handle:hover {
-            border-right: 2px solid var(--vscode-charts-blue);
-            background: rgba(0, 122, 204, 0.1);
-        }
-        th.resizing {
-            user-select: none;
-            background-color: var(--vscode-list-hoverBackground);
-        }
-        .row-resize-handle {
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 100%;
-            height: 8px;
-            cursor: row-resize;
-            background: transparent;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            z-index: 20;
-        }
-        .row-resize-handle:hover {
-            border-bottom: 2px solid var(--vscode-charts-blue);
-            background: rgba(0, 122, 204, 0.1);
-        }
-        tr.resizing {
-            background-color: var(--vscode-list-hoverBackground);
         }
         tr:hover {
             background-color: var(--vscode-list-hoverBackground);
