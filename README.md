@@ -113,7 +113,7 @@ npm run watch
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on how to get started.
 
 ### Areas for Contribution
 - Additional chart types and visualization options
@@ -124,7 +124,17 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**KustoX uses dual licensing:**
+
+- **Open Source**: Licensed under AGPL-3.0 for community use - see the [LICENSE](LICENSE) file for details
+- **Commercial**: Commercial licenses available for proprietary use
+
+### 🔒 Important for Contributors
+- **Fork Required**: You must fork this repository (not clone directly) to contribute
+- **Open Source Requirement**: All derivative works must remain open source under AGPL-3.0 unless you purchase a commercial license
+- **Commercial Licensing**: Contact the maintainer for commercial licensing options
+
+For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 🔗 Links
 

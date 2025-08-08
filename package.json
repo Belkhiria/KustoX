@@ -4,6 +4,7 @@
   "description": "A powerful Visual Studio Code extension to modernize and simplify your data exploration workflow with AI capabilities",
   "version": "0.1.0",
   "publisher": "kustox",
+  "license": "AGPL-3.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/Belkhiria/KustoX.git"

@@ -2,6 +2,18 @@
 
 Thank you for your interest in contributing to KustoX! This document provides guidelines and information for contributors.
 
+## 📄 Important Licensing Information
+
+**KustoX uses dual licensing:**
+- **Open Source**: AGPL-3.0 for community contributions
+- **Commercial**: Separate license available for purchase
+
+### 🔒 Contribution Requirements
+1. **Fork Only**: You must **fork** this repository, not clone it directly
+2. **Open Source Requirement**: All derivative works must remain open source under AGPL-3.0 unless you purchase a commercial license
+3. **License Grant**: By contributing, you grant the project maintainer rights to relicense your contributions under both licenses
+4. **CLA**: Contributors may be required to sign a Contributor License Agreement
+
 ## 🤝 How to Contribute
 
 ### Reporting Issues
@@ -19,18 +31,21 @@ Thank you for your interest in contributing to KustoX! This document provides gu
 ### Code Contributions
 
 #### Getting Started
-1. Fork the repository on GitHub
-2. Clone your fork locally
+1. **Fork** the repository on GitHub (required - do not clone directly)
+2. Clone **your fork** locally: `git clone https://github.com/YOUR_USERNAME/KustoX.git`
 3. Install dependencies: `npm install`
 4. Make your changes in a feature branch
 5. Test your changes: `npm run compile`
-6. Submit a pull request
+6. Submit a pull request to the original repository
 
 #### Development Setup
 ```bash
-# Clone the repository
-git clone https://github.com/Belkhiria/KustoX.git
+# IMPORTANT: Fork the repository first, then clone YOUR fork
+git clone https://github.com/YOUR_USERNAME/KustoX.git
 cd KustoX
+
+# Add the original repository as upstream (for syncing)
+git remote add upstream https://github.com/Belkhiria/KustoX.git
 
 # Install dependencies
 npm install
@@ -43,6 +58,19 @@ npm run watch
 
 # Package the extension for testing
 npm run package
+```
+
+#### Keeping Your Fork Updated
+```bash
+# Fetch changes from upstream
+git fetch upstream
+
+# Merge upstream changes into your main branch
+git checkout main
+git merge upstream/main
+
+# Push updates to your fork
+git push origin main
 ```
 
 #### Testing Your Changes
