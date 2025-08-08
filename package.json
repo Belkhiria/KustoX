@@ -226,11 +226,16 @@
         {
           "command": "kustox.editClusterName",
           "when": "view == kustoxConnections && viewItem == cluster",
+          "group": "context"
+        },
+        {
+          "command": "kustox.editClusterName",
+          "when": "view == kustoxConnections && viewItem == cluster",
           "group": "inline"
         },
         {
           "command": "kustox.copyConnectionString",
-          "when": "view == kustoxConnections && (viewItem == cluster || viewItem == database || viewItem == table)",
+          "when": "view == kustoxConnections && (viewItem == cluster || viewItem == table)",
           "group": "context"
         },
         {

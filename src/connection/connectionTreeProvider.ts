@@ -534,7 +534,8 @@ export class ConnectionTreeProvider implements vscode.TreeDataProvider<Connectio
         let connectionString = '';
         
         if (item.item.type === 'cluster') {
-            connectionString = item.item.name;
+            // Use the actual cluster URL, not the display name
+            connectionString = item.item.cluster || item.item.name;
         } else if (item.item.type === 'database') {
             connectionString = `${item.item.cluster}/${item.item.database}`;
         } else if (item.item.type === 'table') {
