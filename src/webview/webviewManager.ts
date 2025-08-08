@@ -77,6 +77,7 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script>
+        <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
         <script src="https://cdn.datatables.net/select/1.7.0/js/dataTables.select.min.js"></script>
  <!-- Export dependencies -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -770,7 +771,7 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                             regenerate: true
                         },
                         
-                        // Buttons configuration for column visibility
+                        // Buttons configuration for column visibility and export
                         buttons: [
                             {
                                 extend: 'colvis',
@@ -779,6 +780,37 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                                 postfixButtons: ['colvisRestore'],
                                 collectionLayout: 'fixed columns',
                                 collectionTitle: 'Column visibility control'
+                            },
+                            {
+                                text: 'Copy',
+                                className: 'btn btn-secondary',
+                                action: function (e, dt, node, config) {
+                                    copyEntireTableAsHtml();
+                                }
+                            },
+                            {
+                                extend: 'csv',
+                                text: 'CSV',
+                                className: 'btn btn-secondary',
+                                filename: 'kusto-results',
+                                title: 'Kusto Query Results'
+                            },
+                            {
+                                extend: 'excel',
+                                text: 'Excel',
+                                className: 'btn btn-secondary',
+                                filename: 'kusto-results',
+                                title: 'Kusto Query Results',
+                                sheetName: 'Query Results'
+                            },
+                            {
+                                extend: 'pdf',
+                                text: 'PDF',
+                                className: 'btn btn-secondary',
+                                filename: 'kusto-results',
+                                title: 'Kusto Query Results',
+                                orientation: 'landscape',
+                                pageSize: 'A4'
                             }
                         ],
                         
@@ -798,6 +830,21 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                     console.log('✅ DataTables initialized successfully');
                     console.log('📊 Total columns in DataTable:', dataTable.columns().count());
                     console.log('📊 Column headers:', dataTable.columns().header().toArray().map(h => h.textContent));
+                    
+                    // Debug button container creation
+                    console.log('🔍 Checking buttons container...');
+                    const buttonsContainer = $('.dt-buttons');
+                    console.log('📋 Buttons container found:', buttonsContainer.length);
+                    console.log('📋 Buttons container HTML:', buttonsContainer.html());
+                    console.log('📋 All buttons:', $('.dt-button').length);
+                    
+                    // Force show buttons container if hidden
+                    if (buttonsContainer.length > 0) {
+                        buttonsContainer.show();
+                        buttonsContainer.css('visibility', 'visible');
+                        buttonsContainer.css('display', 'block');
+                        console.log('📋 Forced buttons container to be visible');
+                    }
                     
                     // Add cell selection like Kusto Explorer
                     let isSelecting = false;
@@ -858,6 +905,28 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                     // Hide context menu on click elsewhere
                     $(document).on('click', function() {
                         hideContextMenu();
+                    });
+                    
+                    // Keyboard shortcut: Ctrl+C for copy as HTML
+                    $('#kusto-table').on('keydown', function(e) {
+                        if (e.ctrlKey && (e.key === 'c' || e.key === 'C') && selectedCells && selectedCells.length > 0) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Ctrl+C detected on table, calling copyAsHtml()');
+                            copyAsHtml();
+                            return false;
+                        }
+                    });
+                    
+                    // Also add to document level as fallback
+                    $(document).on('keydown', function(e) {
+                        if (e.ctrlKey && (e.key === 'c' || e.key === 'C') && selectedCells && selectedCells.length > 0) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Ctrl+C detected on document, calling copyAsHtml()');
+                            copyAsHtml();
+                            return false;
+                        }
                     });
                     
                     function updateSelection() {
@@ -1036,6 +1105,78 @@ function getResultsWebviewContent(query: string, results: QueryResult, connectio
                     // Fallback to plain text
                     navigator.clipboard.writeText(plainText.trim()).then(() => {
                         console.log('Copied as plain text table');
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                    });
+                }
+            }
+            
+            // Function to copy the entire table as HTML (for Copy button)
+            function copyEntireTableAsHtml() {
+                // Create styled HTML table exactly like Azure Data Explorer
+                let htmlText = '<style>' +
+                    'table { border-collapse: collapse; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; width: auto; margin: 0; }' +
+                    'th { background: linear-gradient(to bottom, #f8f8f8 0%, #e8e8e8 100%); border: 1px solid #d0d0d0; padding: 8px 12px; text-align: left; font-weight: 600; color: #333; white-space: nowrap; }' +
+                    'td { border: 1px solid #d0d0d0; padding: 6px 12px; text-align: left; color: #333; background-color: white; white-space: nowrap; }' +
+                    'tr:nth-child(even) td { background-color: #f9f9f9; }' +
+                    'tr:hover td { background-color: #e3f2fd !important; }' +
+                    'th:first-child, td:first-child { border-left: 2px solid #0078d4; }' +
+                    'table { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }' +
+                    '</style>' +
+                    '<table><thead><tr>';
+                
+                // Add all headers
+                for (let i = 0; i < originalColumns.length; i++) {
+                    htmlText += '<th>' + escapeHtml(originalColumns[i]) + '</th>';
+                }
+                htmlText += '</tr></thead><tbody>';
+                
+                // Add all data rows
+                for (let rowIndex = 0; rowIndex < originalData.length; rowIndex++) {
+                    htmlText += '<tr>';
+                    for (let colIndex = 0; colIndex < originalData[rowIndex].length; colIndex++) {
+                        const cellValue = originalData[rowIndex][colIndex];
+                        htmlText += '<td>' + escapeHtml(cellValue == null ? '' : cellValue.toString()) + '</td>';
+                    }
+                    htmlText += '</tr>';
+                }
+                htmlText += '</tbody></table>';
+                
+                // Create plain text version for fallback
+                let plainText = '';
+                const TAB = String.fromCharCode(9);
+                const NEWLINE = String.fromCharCode(10);
+                
+                // Add all headers
+                plainText += originalColumns.join(TAB) + NEWLINE;
+                
+                // Add all data
+                for (let rowIndex = 0; rowIndex < originalData.length; rowIndex++) {
+                    const rowData = [];
+                    for (let colIndex = 0; colIndex < originalData[rowIndex].length; colIndex++) {
+                        const cellValue = originalData[rowIndex][colIndex];
+                        rowData.push(cellValue == null ? '' : cellValue.toString());
+                    }
+                    plainText += rowData.join(TAB) + NEWLINE;
+                }
+                
+                // Use ClipboardItem to copy both HTML and plain text
+                if (navigator.clipboard && navigator.clipboard.write) {
+                    const clipboardItem = new ClipboardItem({
+                        'text/html': new Blob([htmlText], { type: 'text/html' }),
+                        'text/plain': new Blob([plainText.trim()], { type: 'text/plain' })
+                    });
+                    
+                    navigator.clipboard.write([clipboardItem]).then(() => {
+                        console.log('Copied entire table as formatted HTML successfully');
+                    }).catch(err => {
+                        console.error('Rich copy failed, falling back to plain text:', err);
+                        navigator.clipboard.writeText(plainText.trim());
+                    });
+                } else {
+                    // Fallback to plain text
+                    navigator.clipboard.writeText(plainText.trim()).then(() => {
+                        console.log('Copied entire table as plain text');
                     }).catch(err => {
                         console.error('Copy failed:', err);
                     });
