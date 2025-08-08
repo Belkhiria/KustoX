@@ -83,10 +83,8 @@ class ConnectionTreeProvider {
         return element;
     }
     getChildren(element) {
-        console.log('getChildren called with element:', element?.item);
         if (!element) {
             // Root level - return clusters or welcome message
-            console.log('Getting root level items, connections count:', this.connections.length);
             if (this.connections.length === 0) {
                 // Return a welcome item when no clusters are configured
                 const welcomeItem = {
@@ -103,31 +101,23 @@ class ConnectionTreeProvider {
         }
         else {
             // Handle different types of children
-            console.log('Getting children for item type:', element.item.type);
             if (element.item.type === 'cluster') {
                 // Return databases for clusters
                 const children = element.item.children || [];
-                console.log('Cluster children (databases):', children.length);
                 return Promise.resolve(children.map(child => new ConnectionTreeItem(child, vscode.TreeItemCollapsibleState.Collapsed) // Always make databases expandable
                 ));
             }
             else if (element.item.type === 'database') {
                 // Return tables for databases (discover them dynamically)
-                console.log('Database expanded, discovering tables...');
                 if (element.item.cluster && element.item.database) {
-                    console.log('Database details - cluster:', element.item.cluster, 'database:', element.item.database);
                     // Check cache first
                     const cacheKey = `${element.item.cluster}:${element.item.database}`;
                     const cachedTables = this.tableCache.get(cacheKey);
                     if (cachedTables && cachedTables.length > 0) {
-                        console.log('Using cached tables for', element.item.database, '- found', cachedTables.length, 'tables');
                         return Promise.resolve(cachedTables.map(table => new ConnectionTreeItem(table, vscode.TreeItemCollapsibleState.None)));
                     }
-                    console.log('No cached tables found, discovering from server...');
                     const hasClient = this.clusterClients.has(element.item.cluster);
-                    console.log('Has client for cluster:', hasClient);
                     if (!hasClient) {
-                        console.log('No client available, attempting to authenticate and connect...');
                         // Show progress while connecting for table discovery
                         return vscode.window.withProgress({
                             location: vscode.ProgressLocation.Notification,
@@ -149,10 +139,8 @@ class ConnectionTreeProvider {
                                 progress.report({ increment: 80, message: "Discovering tables..." });
                                 // Store the authenticated client
                                 this.clusterClients.set(element.item.cluster, client);
-                                console.log('Client created and authenticated for table discovery');
                                 const tables = await this.discoverTables(element.item.cluster, element.item.database);
                                 progress.report({ increment: 100, message: "Tables loaded!" });
-                                console.log('Tables discovered after authentication:', tables.length);
                                 return tables.map(table => new ConnectionTreeItem(table, vscode.TreeItemCollapsibleState.None));
                             }
                             catch (error) {
@@ -164,20 +152,16 @@ class ConnectionTreeProvider {
                     }
                     return this.discoverTables(element.item.cluster, element.item.database)
                         .then(tables => {
-                        console.log('Tables discovered:', tables.length);
                         return tables.map(table => new ConnectionTreeItem(table, vscode.TreeItemCollapsibleState.None));
                     })
                         .catch(error => {
-                        console.error('Error loading tables for database:', element.item.database, error);
                         return [];
                     });
                 }
-                console.log('Database missing cluster or database info');
                 return Promise.resolve([]);
             }
             else {
                 // For tables or other types, no children
-                console.log('No children for item type:', element.item.type);
                 return Promise.resolve([]);
             }
         }
@@ -211,7 +195,6 @@ class ConnectionTreeProvider {
                     return;
                 }
             }
-            console.log('Using validated cluster URL:', validatedUrl);
             // Check if cluster already exists
             if (this.connections.find(c => c.name === validatedUrl)) {
                 vscode.window.showWarningMessage('Cluster already exists in the list.');
@@ -327,11 +310,9 @@ class ConnectionTreeProvider {
     async connectToDatabase(item, updateGlobalConnection) {
         if (item.item.type === 'database' && item.item.cluster && item.item.database) {
             try {
-                console.log('Connecting to database:', item.item.database, 'on cluster:', item.item.cluster);
                 // Try to reuse the existing authenticated client
                 let client = this.clusterClients.get(item.item.cluster);
                 if (!client) {
-                    console.log('No existing client found, creating new connection...');
                     // Show progress while authenticating
                     await vscode.window.withProgress({
                         location: vscode.ProgressLocation.Notification,
@@ -351,10 +332,8 @@ class ConnectionTreeProvider {
                         // Test the connection immediately to trigger authentication
                         try {
                             await client.execute(item.item.database, 'print "Authentication test"');
-                            console.log('Authentication successful');
                             // Only store the client if authentication succeeds
                             this.clusterClients.set(item.item.cluster, client);
-                            console.log('Client authenticated and stored successfully');
                             progress.report({ increment: 100, message: "Connected!" });
                         }
                         catch (authError) {
@@ -364,15 +343,11 @@ class ConnectionTreeProvider {
                     });
                 }
                 else {
-                    console.log('Reusing existing authenticated client');
                     // Test the existing client to make sure it's still valid
                     try {
-                        console.log('Testing existing client connection...');
                         await client.execute(item.item.database, 'print "Connection test"');
-                        console.log('Existing client is still valid');
                     }
                     catch (testError) {
-                        console.warn('Existing client failed, re-authenticating...', testError);
                         // Remove the failed client and try again
                         this.clusterClients.delete(item.item.cluster);
                         // Recursive call to create a new client
@@ -388,7 +363,6 @@ class ConnectionTreeProvider {
                 updateGlobalConnection(connection);
                 vscode.window.showInformationMessage(`Connected to ${item.item.database} on ${item.item.cluster}`);
                 // Trigger a refresh of the tree to show tables
-                console.log('Refreshing tree to show tables...');
                 this.refresh();
             }
             catch (error) {
@@ -401,29 +375,21 @@ class ConnectionTreeProvider {
     }
     async discoverTables(clusterUrl, database) {
         try {
-            console.log('Discovering tables for database:', database, 'on cluster:', clusterUrl);
             const client = this.clusterClients.get(clusterUrl);
             if (!client) {
                 console.warn('No client found for cluster:', clusterUrl);
                 return [];
             }
-            console.log('Client found, executing .show tables query...');
             // Query to get tables in the database
             const query = '.show tables';
             const results = await client.execute(database, query);
-            console.log('Tables query results:', results);
-            console.log('Primary results available:', !!results?.primaryResults);
-            console.log('Primary results length:', results?.primaryResults?.length);
             const tables = [];
             if (results && results.primaryResults && results.primaryResults.length > 0) {
                 const table = results.primaryResults[0];
-                console.log('Processing table rows...');
                 let rowCount = 0;
                 for (const row of table.rows()) {
                     rowCount++;
-                    console.log('Row', rowCount, ':', row);
                     const tableName = row.TableName || row[0]; // Handle different response formats
-                    console.log('Extracted table name:', tableName);
                     if (tableName) {
                         tables.push({
                             type: 'table',
@@ -434,19 +400,14 @@ class ConnectionTreeProvider {
                         });
                     }
                 }
-                console.log('Total rows processed:', rowCount);
-                console.log('Total tables discovered:', tables.length);
             }
-            console.log('Returning tables:', tables.map(t => t.name));
             // Cache the discovered tables
             const cacheKey = `${clusterUrl}:${database}`;
             this.tableCache.set(cacheKey, tables);
             this.saveTableCache();
-            console.log('Tables cached for', cacheKey);
             return tables;
         }
         catch (error) {
-            console.error('Error discovering tables for database:', database, error);
             return [];
         }
     }
@@ -475,17 +436,14 @@ class ConnectionTreeProvider {
     loadTableCache() {
         const saved = this.context.globalState.get('kustoxTableCache', {});
         this.tableCache = new Map(Object.entries(saved));
-        console.log('Loaded table cache with', this.tableCache.size, 'entries');
     }
     saveTableCache() {
         const cacheObject = Object.fromEntries(this.tableCache);
         this.context.globalState.update('kustoxTableCache', cacheObject);
-        console.log('Saved table cache with', this.tableCache.size, 'entries');
     }
     refreshTableCache(clusterUrl, database) {
         const cacheKey = `${clusterUrl}:${database}`;
         this.tableCache.delete(cacheKey);
-        console.log('Cleared table cache for', cacheKey);
         this.refresh(); // Refresh the tree to reload tables
     }
 }

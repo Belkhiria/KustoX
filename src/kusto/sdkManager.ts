@@ -14,10 +14,6 @@ export async function loadKustoSDK() {
         KustoConnectionStringBuilder = kustoModule.KustoConnectionStringBuilder;
         ClientRequestProperties = kustoModule.ClientRequestProperties;
         
-        console.log('Azure Kusto SDK initialized');
-        console.log('KustoClient loaded:', typeof KustoClient);
-        console.log('KustoConnectionStringBuilder loaded:', typeof KustoConnectionStringBuilder);
-        console.log('ClientRequestProperties loaded:', typeof ClientRequestProperties);
         
         if (!KustoClient || !KustoConnectionStringBuilder || !ClientRequestProperties) {
             throw new Error('Failed to load required Kusto SDK components');

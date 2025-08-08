@@ -48,7 +48,6 @@ function updateConnectionStatus() {
 }
 exports.updateConnectionStatus = updateConnectionStatus;
 function activate(context) {
-    console.log('KustoX extension is now active!');
     // Create status bar item
     connectionStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     connectionStatusBarItem.command = 'kustox.configureConnection';
@@ -259,7 +258,6 @@ function deactivate() {
     if (connectionStatusBarItem) {
         connectionStatusBarItem.dispose();
     }
-    console.log('KustoX extension is now deactivated!');
 }
 exports.deactivate = deactivate;
 //# sourceMappingURL=extension.js.map

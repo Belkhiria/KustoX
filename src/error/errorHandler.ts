@@ -13,9 +13,6 @@ export function parseKustoError(error: any): ParsedError {
     let oneApiErrors: any[] = [];
 
     try {
-        console.log('Parsing error:', error);
-        console.log('Error type:', typeof error);
-        console.log('Error constructor:', error?.constructor?.name);
         
         // Handle string errors
         if (typeof error === 'string') {

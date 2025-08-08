@@ -275,7 +275,6 @@ export class ConnectionConfigurator {
                 progress.report({ increment: 80, message: "Testing connection..." });
 
                 // Test the connection with a simple query with timeout
-                console.log('Testing connection with simple query...');
                 
                 const testResponse = await Promise.race([
                     client.execute(database, 'print "Connection test successful"'),
@@ -284,9 +283,6 @@ export class ConnectionConfigurator {
                     )
                 ]);
                 
-                console.log('Test query response:', testResponse);
-                console.log('Test query response type:', typeof testResponse);
-                console.log('Test query response keys:', Object.keys(testResponse || {}));
                 
                 progress.report({ increment: 100, message: "Connected!" });
 

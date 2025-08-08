@@ -246,14 +246,10 @@ class ConnectionConfigurator {
                 const client = new KustoClient(kcsb);
                 progress.report({ increment: 80, message: "Testing connection..." });
                 // Test the connection with a simple query with timeout
-                console.log('Testing connection with simple query...');
                 const testResponse = await Promise.race([
                     client.execute(database, 'print "Connection test successful"'),
                     new Promise((_, reject) => setTimeout(() => reject(new Error('Connection test timeout after 30 seconds. This might be due to pending authentication. Please check if authentication is required in your browser.')), 30000))
                 ]);
-                console.log('Test query response:', testResponse);
-                console.log('Test query response type:', typeof testResponse);
-                console.log('Test query response keys:', Object.keys(testResponse || {}));
                 progress.report({ increment: 100, message: "Connected!" });
                 const connection = {
                     client,

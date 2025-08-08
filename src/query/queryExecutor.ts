@@ -68,9 +68,6 @@ export class QueryExecutor {
         // First, clean the query text
         const cleanedText = this.cleanQuery(queryText);
         
-        console.log('🔍 Original query text:', queryText);
-        console.log('🔍 Cleaned query text:', cleanedText);
-        
         // More sophisticated detection for multiple queries
         // We need to distinguish between:
         // 1. Semicolons that are part of Kusto syntax (like after 'let' statements)
@@ -109,23 +106,15 @@ export class QueryExecutor {
         
         const hasMultipleQueries = hasAsQueryPattern || hasSemicolonSeparatedQueries;
         
-        console.log('🔍 Multiple query detection patterns:');
-        console.log('  Pattern 1 ("| as Name;"):', hasAsQueryPattern);
-        console.log('  Pattern 2 (semicolon separated queries):', hasSemicolonSeparatedQueries);
-        console.log('  Treating as multiple queries:', hasMultipleQueries);
-        
         if (!hasMultipleQueries) {
             // Single query - return as is
-            console.log('📄 Detected as single query, returning as-is');
             return [{
                 query: cleanedText
             }];
         }
         
         // Multiple queries detected - split by semicolon that's not inside quotes
-        console.log('📄 Detected as multiple queries, splitting...');
         const parts = this.splitQueriesBySemicolon(cleanedText);
-        console.log('🔍 Split into', parts.length, 'parts');
         
         const queries: Array<{query: string, name?: string}> = [];
         
@@ -134,16 +123,11 @@ export class QueryExecutor {
         let letStatements = '';
         let actualQueries: string[] = [];
         
-        console.log('🔍 Processing each part to identify let statements vs actual queries...');
         
         for (let partIndex = 0; partIndex < parts.length; partIndex++) {
             let part = parts[partIndex].trim();
             if (!part) continue;
             
-            console.log(`🔍 Processing part ${partIndex + 1}:`);
-            console.log('─'.repeat(40));
-            console.log(part);
-            console.log('─'.repeat(40));
             
             // Check if this part contains only let statements
             const lines = part.split('\n').map(line => line.trim()).filter(line => line.length > 0);
@@ -154,27 +138,17 @@ export class QueryExecutor {
                 line.endsWith(';') && line.indexOf('|') === -1 && line.indexOf('print') === -1
             );
             
-            console.log(`🔍 Part ${partIndex + 1} analysis:`);
-            console.log(`  Lines: ${lines.length}`);
-            console.log(`  Lines content: ${JSON.stringify(lines)}`);
-            console.log(`  Is only let statements: ${isOnlyLetStatements}`);
             
             if (isOnlyLetStatements) {
                 // This part contains only let statements - save them to prepend to actual queries
                 letStatements = part;
-                console.log('🔧 Found let statements part:', letStatements);
             } else {
                 // This is an actual query
-                console.log('🔧 Found actual query part');
                 actualQueries.push(part);
             }
         }
         
-        console.log('🔍 Final categorization:');
-        console.log(`  Let statements: "${letStatements}"`);
-        console.log(`  Actual queries: ${actualQueries.length} queries`);
         actualQueries.forEach((query, index) => {
-            console.log(`    Query ${index + 1}: "${query.substring(0, 50)}..."`);
         });
         
         // Process each actual query
@@ -193,7 +167,6 @@ export class QueryExecutor {
                     query: fullQuery,
                     name: queryName
                 });
-                console.log(`🔧 Extracted query "${queryName}" without "| as" syntax`);
             } else {
                 // Regular query without alias
                 const cleanQuery = queryPart.replace(/;$/, '').trim();
@@ -205,16 +178,11 @@ export class QueryExecutor {
         }
         
         const filteredQueries = queries.filter(q => q.query.length > 0);
-        console.log('🔍 Final parsed queries:', filteredQueries.map(q => ({ name: q.name, queryLength: q.query.length, preview: q.query.substring(0, 50) + '...' })));
         
         return filteredQueries;
     }
 
     private splitQueriesBySemicolon(text: string): string[] {
-        console.log('🔧 splitQueriesBySemicolon called with text:');
-        console.log('─'.repeat(80));
-        console.log(text);
-        console.log('─'.repeat(80));
         
         // For Kusto multiple query syntax, we need to be smarter about splitting
         // We should only split on semicolons that are actual query separators,
@@ -226,7 +194,6 @@ export class QueryExecutor {
         let inDoubleQuote = false;
         let i = 0;
         
-        console.log('🔍 Starting character-by-character parsing...');
         
         while (i < text.length) {
             const char = text[i];
@@ -237,15 +204,12 @@ export class QueryExecutor {
             
             if (char === "'" && !inDoubleQuote) {
                 inSingleQuote = !inSingleQuote;
-                console.log(`🔍 Position ${i}: Found single quote '${char}' - single quote state: ${wasInSingleQuote} → ${inSingleQuote}`);
                 current += char; // Add the quote to the current string
             } else if (char === '"' && !inSingleQuote) {
                 inDoubleQuote = !inDoubleQuote;
-                console.log(`🔍 Position ${i}: Found double quote '${char}' - double quote state: ${wasInDoubleQuote} → ${inDoubleQuote}`);
                 current += char; // Add the quote to the current string
             } else if (char === ';' && !inSingleQuote && !inDoubleQuote) {
                 // Found a semicolon outside of quotes - but we need to check if it's a query separator
-                console.log(`🔍 Position ${i}: Found semicolon outside quotes - checking if it's a query separator`);
                 
                 // Look ahead to see what comes after this semicolon
                 let nextNonWhitespaceIndex = i + 1;
@@ -254,18 +218,15 @@ export class QueryExecutor {
                 }
                 
                 const remainingText = text.substring(nextNonWhitespaceIndex);
-                console.log(`🔍 Text after semicolon: "${remainingText.substring(0, 50)}..."`);
                 
                 // Check if this semicolon is followed by a new query (not a let statement)
                 // A new query typically starts with a table name or 'print', not 'let'
                 const isQuerySeparator = /^((?!let\s)\w+\s*\||\w+\s*$|print\s)/i.test(remainingText);
                 
-                console.log(`🔍 Is query separator: ${isQuerySeparator}`);
                 
                 if (isQuerySeparator) {
                     // This is a genuine query separator
                     const currentQuery = current + char;
-                    console.log(`✂️ SPLITTING: Adding query part: "${currentQuery.substring(0, 100)}${currentQuery.length > 100 ? '...' : ''}"`);
                     queries.push(currentQuery); // Include the semicolon in the query
                     current = '';
                     i++;
@@ -273,13 +234,11 @@ export class QueryExecutor {
                 } else {
                     // This is just a semicolon in Kusto syntax (like after a let statement)
                     // Include it in the current query and continue
-                    console.log(`🔍 Not a query separator - including semicolon in current query`);
                     current += char;
                 }
             } else {
                 // Regular character - just add to current
                 if (char === ';') {
-                    console.log(`🔍 Position ${i}: Semicolon inside quotes (single: ${inSingleQuote}, double: ${inDoubleQuote}) - NOT splitting`);
                 }
                 current += char;
             }
@@ -289,16 +248,10 @@ export class QueryExecutor {
         
         // Add the last query if there's remaining content
         if (current.trim()) {
-            console.log(`📝 Adding final query part: "${current.substring(0, 100)}${current.length > 100 ? '...' : ''}"`);
             queries.push(current);
         }
         
-        console.log('🔧 splitQueriesBySemicolon result - found', queries.length, 'parts:');
         queries.forEach((query, index) => {
-            console.log(`📋 Part ${index + 1}:`);
-            console.log('─'.repeat(60));
-            console.log(query);
-            console.log('─'.repeat(60));
         });
         
         return queries;
@@ -331,14 +284,6 @@ export class QueryExecutor {
             }
         }
 
-        // Validate connection details
-        console.log('🔍 Kusto connection details:', {
-            cluster: connection.cluster,
-            database: connection.database,
-            hasClient: !!connection.client,
-            clientType: connection.client?.constructor?.name
-        });
-
         // Test connection configuration
         if (!connection.cluster || !connection.database) {
             vscode.window.showErrorMessage('Invalid connection configuration. Please reconnect to your Kusto cluster.');
@@ -363,19 +308,13 @@ export class QueryExecutor {
             return;
         }
 
-        console.log(`Found ${parsedQueries.length} queries to execute:`, parsedQueries.map(q => ({ name: q.name, queryLength: q.query.length })));
         
         // Debug: Log each parsed query in detail
         parsedQueries.forEach((q, i) => {
-            console.log(`\n🔍 PARSED QUERY ${i + 1} (Name: ${q.name || 'Unnamed'}):`);
-            console.log('─'.repeat(50));
-            console.log(q.query);
-            console.log('─'.repeat(50));
         });
 
         // If only one query, execute it normally
         if (parsedQueries.length === 1) {
-            console.log('📄 Executing single query');
             const queryToExecute = parsedQueries[0].query;
             
             // For single queries, use the first table name as the tab title if no explicit name is provided
@@ -383,7 +322,6 @@ export class QueryExecutor {
             if (!queryTitle) {
                 const tableName = this.extractTableName(queryToExecute);
                 queryTitle = tableName;
-                console.log(`🔍 Extracted table name for single query: ${tableName}`);
             }
             
             await this.executeSingleQuery(queryToExecute, queryTitle);
@@ -391,7 +329,6 @@ export class QueryExecutor {
         }
 
         // Multiple queries - execute them sequentially and show in separate tabs
-        console.log('📄 Executing multiple queries');
         await this.executeMultipleQueries(parsedQueries);
     }
 
@@ -401,13 +338,10 @@ export class QueryExecutor {
         // For debugging: Try to test connection first with a simple query
         if (queryToExecute.trim().toLowerCase() === 'debug connection') {
             try {
-                console.log('🔧 Testing basic connection with minimal query...');
                 const testResponse = await connection.client.execute(connection.database, 'print "test"');
-                console.log('✅ Basic connection test successful:', testResponse);
                 vscode.window.showInformationMessage('✅ Connection test successful!');
                 return;
             } catch (testError) {
-                console.error('❌ Basic connection test failed:', testError);
                 vscode.window.showErrorMessage(`❌ Connection test failed: ${testError}`);
                 return;
             }
@@ -437,15 +371,6 @@ export class QueryExecutor {
                 progress.report({ increment: 30, message: "Sending query to cluster..." });
 
                 // Debug: Log what we're about to send
-                console.log('🔍 Debug - About to execute query:');
-                console.log('  Cluster:', connection.cluster);
-                console.log('  Database:', connection.database);
-                console.log('  Query length:', queryToExecute.length);
-                console.log('  Client request ID:', crp.getOption('clientRequestId'));
-                console.log('🔍 FULL QUERY BEING SENT TO KUSTO:');
-                console.log('─'.repeat(60));
-                console.log(queryToExecute);
-                console.log('─'.repeat(60));
 
                 // Execute query with client request properties
                 const response = await connection.client.execute(
@@ -462,16 +387,8 @@ export class QueryExecutor {
                 const results = processKustoResponse(response, executionTime);
                 
                 // Add detailed debugging for blank results
-                console.log('🔍 Query execution results:');
-                console.log('  Row count:', results.rowCount);
-                console.log('  Has data:', results.hasData);
-                console.log('  Columns:', results.columns.length);
-                console.log('  Response type:', typeof response);
-                console.log('  Response keys:', response ? Object.keys(response) : 'null');
                 
                 if (!results.hasData || results.rowCount === 0) {
-                    console.log('⚠️ No data returned from query');
-                    console.log('  Raw response:', JSON.stringify(response, null, 2).substring(0, 1000));
                     
                     // Show a message to user about no results
                     vscode.window.showInformationMessage(
@@ -498,24 +415,12 @@ export class QueryExecutor {
 
         } catch (error) {
             // Enhanced error handling for detailed Kusto errors
-            console.error('🚨 Full error object:', error);
-            console.error('🚨 Error type:', typeof error);
-            console.error('🚨 Error constructor:', error?.constructor?.name);
-            console.error('🚨 Error message:', (error as any)?.message);
-            console.error('🚨 Error string:', (error as any)?.toString());
             
             // Check if it's an axios error with response details
             const errorObj = error as any;
             if (errorObj.response) {
-                console.error('🚨 Response status:', errorObj.response.status);
-                console.error('🚨 Response headers:', errorObj.response.headers);
-                console.error('🚨 Response data:', errorObj.response.data);
-                console.error('🚨 Response data (stringified):', JSON.stringify(errorObj.response.data, null, 2));
             }
             if (errorObj.config) {
-                console.error('🚨 Request config URL:', errorObj.config.url);
-                console.error('🚨 Request config method:', errorObj.config.method);
-                console.error('🚨 Request config headers:', errorObj.config.headers);
             }
             
             let detailedError = parseKustoError(error);
@@ -577,11 +482,6 @@ export class QueryExecutor {
                     crp.setOption('application', 'KustoX-VSCode-Extension');
                     crp.setOption('version', '0.1.0');
                     
-                    console.log(`🔍 Executing query ${i + 1}/${queries.length}: ${queryName}`);
-                    console.log('🔍 FULL QUERY BEING SENT TO KUSTO:');
-                    console.log('─'.repeat(60));
-                    console.log(queryInfo.query);
-                    console.log('─'.repeat(60));
                     
                     // Execute the query
                     const response = await connection.client.execute(
@@ -599,10 +499,8 @@ export class QueryExecutor {
                         result: results
                     });
                     
-                    console.log(`✅ Query ${i + 1} completed: ${results.rowCount} rows`);
                     
                 } catch (error) {
-                    console.error(`❌ Query ${i + 1} failed:`, error);
                     
                     const detailedError = parseKustoError(error);
                     queryResults.push({

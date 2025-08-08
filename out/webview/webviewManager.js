@@ -697,8 +697,6 @@ function getResultsWebviewContent(query, results, connection) {
                     return;
                 }
                 
-                console.log('Initializing DataTable...');
-                console.log('Table element exists:', $('#kusto-table').length > 0);
                 
                 // Get table data for column type detection
                 const tableData = [];
@@ -715,7 +713,6 @@ function getResultsWebviewContent(query, results, connection) {
                     columns.push($(this).text());
                 });
                 
-                console.log('Found', tableData.length, 'rows and', columns.length, 'columns');
                 
                 const columnTypes = detectColumnTypes(tableData, columns);
                 
@@ -833,23 +830,15 @@ function getResultsWebviewContent(query, results, connection) {
                         }
                     });
                     
-                    console.log('✅ DataTables initialized successfully');
-                    console.log('📊 Total columns in DataTable:', dataTable.columns().count());
-                    console.log('📊 Column headers:', dataTable.columns().header().toArray().map(h => h.textContent));
                     
                     // Debug button container creation
-                    console.log('🔍 Checking buttons container...');
                     const buttonsContainer = $('.dt-buttons');
-                    console.log('📋 Buttons container found:', buttonsContainer.length);
-                    console.log('📋 Buttons container HTML:', buttonsContainer.html());
-                    console.log('📋 All buttons:', $('.dt-button').length);
                     
                     // Force show buttons container if hidden
                     if (buttonsContainer.length > 0) {
                         buttonsContainer.show();
                         buttonsContainer.css('visibility', 'visible');
                         buttonsContainer.css('display', 'block');
-                        console.log('📋 Forced buttons container to be visible');
                     }
                     
                     // Add cell selection like Kusto Explorer
@@ -918,7 +907,6 @@ function getResultsWebviewContent(query, results, connection) {
                         if (e.ctrlKey && (e.key === 'c' || e.key === 'C') && selectedCells && selectedCells.length > 0) {
                             e.preventDefault();
                             e.stopPropagation();
-                            console.log('Ctrl+C detected on table, calling copyAsHtml()');
                             copyAsHtml();
                             return false;
                         }
@@ -929,7 +917,6 @@ function getResultsWebviewContent(query, results, connection) {
                         if (e.ctrlKey && (e.key === 'c' || e.key === 'C') && selectedCells && selectedCells.length > 0) {
                             e.preventDefault();
                             e.stopPropagation();
-                            console.log('Ctrl+C detected on document, calling copyAsHtml()');
                             copyAsHtml();
                             return false;
                         }
@@ -957,8 +944,6 @@ function getResultsWebviewContent(query, results, connection) {
                     }
                     
                 } catch (error) {
-                    console.error('❌ Failed to initialize DataTables:', error);
-                    console.log('Falling back to basic table display');
                 }
                 
                 // Context menu functions (outside try block for global access)
@@ -1013,7 +998,6 @@ function getResultsWebviewContent(query, results, connection) {
                 }
                 
                 navigator.clipboard.writeText(copyText.trim()).then(() => {
-                    console.log('Copied with headers successfully');
                 }).catch(err => {
                     console.error('Copy failed:', err);
                 });
@@ -1102,15 +1086,12 @@ function getResultsWebviewContent(query, results, connection) {
                     });
                     
                     navigator.clipboard.write([clipboardItem]).then(() => {
-                        console.log('Copied as formatted table successfully');
                     }).catch(err => {
-                        console.error('Rich copy failed, falling back to plain text:', err);
                         navigator.clipboard.writeText(plainText.trim());
                     });
                 } else {
                     // Fallback to plain text
                     navigator.clipboard.writeText(plainText.trim()).then(() => {
-                        console.log('Copied as plain text table');
                     }).catch(err => {
                         console.error('Copy failed:', err);
                     });
@@ -1174,15 +1155,12 @@ function getResultsWebviewContent(query, results, connection) {
                     });
                     
                     navigator.clipboard.write([clipboardItem]).then(() => {
-                        console.log('Copied entire table as formatted HTML successfully');
                     }).catch(err => {
-                        console.error('Rich copy failed, falling back to plain text:', err);
                         navigator.clipboard.writeText(plainText.trim());
                     });
                 } else {
                     // Fallback to plain text
                     navigator.clipboard.writeText(plainText.trim()).then(() => {
-                        console.log('Copied entire table as plain text');
                     }).catch(err => {
                         console.error('Copy failed:', err);
                     });
@@ -1242,7 +1220,6 @@ function getResultsWebviewContent(query, results, connection) {
                 }
                 
                 navigator.clipboard.writeText(sqlText).then(() => {
-                    console.log('Copied as database format successfully');
                 }).catch(err => {
                     console.error('Copy failed:', err);
                 });
@@ -1371,7 +1348,6 @@ function getResultsWebviewContent(query, results, connection) {
 
 
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('DOM loaded, initializing DataTables');
                 // Check if we're showing the table tab initially
                 const chartTab = document.getElementById('chart-tab');
                 if (!chartTab || !chartTab.classList.contains('active')) {
