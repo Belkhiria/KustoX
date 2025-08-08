@@ -63,6 +63,18 @@ class ConnectionConfigurator {
             if (!clusterUrl) {
                 return;
             }
+            // Get optional alias/display name for the cluster
+            const clusterAlias = await vscode.window.showInputBox({
+                prompt: 'Enter a display name for this cluster (optional)',
+                placeHolder: 'e.g., "Production", "Help Cluster", "Analytics DB"',
+                validateInput: (value) => {
+                    // Alias is optional, so empty is allowed
+                    if (value && value.trim().length > 50) {
+                        return 'Display name should be 50 characters or less';
+                    }
+                    return null;
+                }
+            });
             // Get database name
             const database = await vscode.window.showInputBox({
                 prompt: 'Enter database name',
@@ -246,7 +258,8 @@ class ConnectionConfigurator {
                 const connection = {
                     client,
                     cluster: clusterUrl,
-                    database
+                    database,
+                    alias: clusterAlias?.trim() || undefined
                 };
                 this.setConnection(connection);
                 this.updateStatusCallback();

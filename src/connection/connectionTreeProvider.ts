@@ -17,7 +17,11 @@ export class ConnectionTreeItem extends vscode.TreeItem {
         
         if (item.type === 'cluster') {
             this.iconPath = new vscode.ThemeIcon('server-environment');
-            this.tooltip = `Cluster: ${item.name}`;
+            if (item.alias) {
+                this.tooltip = `${item.alias} (${item.cluster || item.name})`;
+            } else {
+                this.tooltip = `Cluster: ${item.name}`;
+            }
         } else if (item.type === 'database') {
             this.iconPath = new vscode.ThemeIcon('database');
             this.tooltip = `Database: ${item.name}`;
@@ -188,7 +192,7 @@ export class ConnectionTreeProvider implements vscode.TreeDataProvider<Connectio
         }
     }
 
-    async addCluster(clusterUrl: string): Promise<void> {
+    async addCluster(clusterUrl: string, alias?: string): Promise<void> {
         try {
             // Enhanced URL validation for different Kusto cluster formats
             let validatedUrl = clusterUrl.trim();
@@ -302,8 +306,9 @@ export class ConnectionTreeProvider implements vscode.TreeDataProvider<Connectio
                 // Add cluster with databases
                 const clusterItem: ConnectionItem = {
                     type: 'cluster',
-                    name: validatedUrl,
+                    name: alias || validatedUrl, // Use alias as display name if provided
                     cluster: validatedUrl,
+                    alias: alias,
                     children: databases
                 };
 
@@ -331,6 +336,42 @@ export class ConnectionTreeProvider implements vscode.TreeDataProvider<Connectio
             this.saveConnections();
             this.refresh();
             vscode.window.showInformationMessage(`Removed cluster: ${item.item.name}`);
+        }
+    }
+
+    async editClusterName(item: ConnectionTreeItem): Promise<void> {
+        if (item.item.type !== 'cluster') {
+            return;
+        }
+
+        const currentAlias = item.item.alias || '';
+        const clusterUrl = item.item.cluster || item.item.name;
+
+        const newAlias = await vscode.window.showInputBox({
+            prompt: 'Edit cluster display name',
+            placeHolder: 'Enter a display name for this cluster (leave empty to use URL)',
+            value: currentAlias,
+            validateInput: (value) => {
+                if (value && value.trim().length > 50) {
+                    return 'Display name should be 50 characters or less';
+                }
+                return null;
+            }
+        });
+
+        if (newAlias !== undefined) { // User didn't cancel
+            const index = this.connections.findIndex(c => c.name === item.item.name);
+            if (index !== -1) {
+                const trimmedAlias = newAlias.trim();
+                this.connections[index].alias = trimmedAlias || undefined;
+                this.connections[index].name = trimmedAlias || clusterUrl;
+                
+                this.saveConnections();
+                this.refresh();
+                
+                const displayName = trimmedAlias || clusterUrl;
+                vscode.window.showInformationMessage(`Cluster name updated to: ${displayName}`);
+            }
         }
     }
 

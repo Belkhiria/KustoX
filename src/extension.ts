@@ -125,7 +125,20 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
         if (clusterUrl) {
-            await connectionProvider.addCluster(clusterUrl);
+            // Get optional alias/display name for the cluster
+            const clusterAlias = await vscode.window.showInputBox({
+                prompt: 'Enter a display name for this cluster (optional)',
+                placeHolder: 'e.g., "Production", "Help Cluster", "Analytics DB"',
+                validateInput: (value) => {
+                    // Alias is optional, so empty is allowed
+                    if (value && value.trim().length > 50) {
+                        return 'Display name should be 50 characters or less';
+                    }
+                    return null;
+                }
+            });
+
+            await connectionProvider.addCluster(clusterUrl, clusterAlias?.trim());
         }
     });
 
@@ -150,6 +163,10 @@ export function activate(context: vscode.ExtensionContext) {
         if (answer === 'Yes') {
             connectionProvider.removeCluster(item);
         }
+    });
+
+    const editClusterNameCommand = vscode.commands.registerCommand('kustox.editClusterName', (item: ConnectionTreeItem) => {
+        connectionProvider.editClusterName(item);
     });
 
     const copyConnectionStringCommand = vscode.commands.registerCommand('kustox.copyConnectionString', (item: ConnectionTreeItem) => {
@@ -257,6 +274,7 @@ export function activate(context: vscode.ExtensionContext) {
         refreshConnectionsCommand,
         connectToDatabaseCommand,
         removeClusterCommand,
+        editClusterNameCommand,
         copyConnectionStringCommand,
         insertTableNameCommand,
         refreshTablesCommand,

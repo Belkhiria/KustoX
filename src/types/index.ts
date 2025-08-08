@@ -6,6 +6,7 @@ export interface KustoConnection {
     client: any;
     cluster: string;
     database: string;
+    alias?: string;  // Optional display name for the cluster
 }
 
 export interface ConnectionItem {
@@ -15,6 +16,7 @@ export interface ConnectionItem {
     database?: string;
     table?: string;
     children?: ConnectionItem[];
+    alias?: string;  // Optional display name for clusters
 }
 
 export interface QueryResult {

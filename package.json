@@ -115,6 +115,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "kustox.editClusterName",
+        "title": "Edit Cluster Name",
+        "category": "KustoX",
+        "icon": "$(edit)"
+      },
+      {
         "command": "kustox.copyConnectionString",
         "title": "Copy Connection String",
         "category": "KustoX",
@@ -216,6 +222,11 @@
           "command": "kustox.removeCluster",
           "when": "view == kustoxConnections && viewItem == cluster",
           "group": "context"
+        },
+        {
+          "command": "kustox.editClusterName",
+          "when": "view == kustoxConnections && viewItem == cluster",
+          "group": "inline"
         },
         {
           "command": "kustox.copyConnectionString",

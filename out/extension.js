@@ -129,7 +129,19 @@ function activate(context) {
             }
         });
         if (clusterUrl) {
-            await connectionProvider.addCluster(clusterUrl);
+            // Get optional alias/display name for the cluster
+            const clusterAlias = await vscode.window.showInputBox({
+                prompt: 'Enter a display name for this cluster (optional)',
+                placeHolder: 'e.g., "Production", "Help Cluster", "Analytics DB"',
+                validateInput: (value) => {
+                    // Alias is optional, so empty is allowed
+                    if (value && value.trim().length > 50) {
+                        return 'Display name should be 50 characters or less';
+                    }
+                    return null;
+                }
+            });
+            await connectionProvider.addCluster(clusterUrl, clusterAlias?.trim());
         }
     });
     const refreshConnectionsCommand = vscode.commands.registerCommand('kustox.refreshConnections', () => {
@@ -147,6 +159,9 @@ function activate(context) {
         if (answer === 'Yes') {
             connectionProvider.removeCluster(item);
         }
+    });
+    const editClusterNameCommand = vscode.commands.registerCommand('kustox.editClusterName', (item) => {
+        connectionProvider.editClusterName(item);
     });
     const copyConnectionStringCommand = vscode.commands.registerCommand('kustox.copyConnectionString', (item) => {
         connectionProvider.copyConnectionString(item);
@@ -234,7 +249,7 @@ function activate(context) {
         vscode.window.showInformationMessage(`Mock data generated: ${mockResult.rowCount} rows, ${mockResult.columns.length} columns`);
     });
     // Push all commands to subscriptions
-    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand);
+    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, editClusterNameCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand);
     // Show a welcome message when the extension activates
     vscode.window.showInformationMessage('KustoX extension loaded! Use "KustoX: Configure Connection" to connect to your cluster.');
 }
