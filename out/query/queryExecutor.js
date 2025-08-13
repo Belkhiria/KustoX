@@ -336,6 +336,17 @@ class QueryExecutor {
                 // Add to Virtual File System for AI access
                 if (this.resultsFileSystem && results.hasData) {
                     const resultId = this.resultsFileSystem.addQueryResult(queryToExecute, results, connection.cluster, connection.database, 'kustox-webview://current');
+                    // Auto-open VFS file if enabled (helps GitHub Copilot include it in context)
+                    const config = vscode.workspace.getConfiguration('kustox.ai');
+                    const autoOpenVFS = config.get('autoOpenVFS', false);
+                    if (autoOpenVFS) {
+                        const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
+                        vscode.commands.executeCommand('vscode.open', vfsUri, {
+                            viewColumn: vscode.ViewColumn.Beside,
+                            preserveFocus: true,
+                            preview: true
+                        });
+                    }
                     // Show subtle notification about AI accessibility
                     const statusBarMessage = vscode.window.setStatusBarMessage(`$(check) Query complete: ${results.rowCount} rows | $(hubot) AI result ID: ${resultId}`, 10000 // Show for 10 seconds
                     );
@@ -445,6 +456,17 @@ class QueryExecutor {
                 // Add to VFS for AI access
                 if (this.resultsFileSystem && result.result.hasData) {
                     const resultId = this.resultsFileSystem.addQueryResult(result.query, result.result, connection.cluster, connection.database, `kustox-webview://${tabTitle}`);
+                    // Auto-open VFS file if enabled (helps GitHub Copilot include it in context)
+                    const config = vscode.workspace.getConfiguration('kustox.ai');
+                    const autoOpenVFS = config.get('autoOpenVFS', false);
+                    if (autoOpenVFS) {
+                        const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
+                        vscode.commands.executeCommand('vscode.open', vfsUri, {
+                            viewColumn: vscode.ViewColumn.Beside,
+                            preserveFocus: true,
+                            preview: true
+                        });
+                    }
                 }
             }
         });

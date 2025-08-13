@@ -400,6 +400,19 @@ export class QueryExecutor {
                         'kustox-webview://current'
                     );
                     
+                    // Auto-open VFS file if enabled (helps GitHub Copilot include it in context)
+                    const config = vscode.workspace.getConfiguration('kustox.ai');
+                    const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
+                    
+                    if (autoOpenVFS) {
+                        const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
+                        vscode.commands.executeCommand('vscode.open', vfsUri, {
+                            viewColumn: vscode.ViewColumn.Beside,
+                            preserveFocus: true,
+                            preview: true
+                        });
+                    }
+                    
                     // Show subtle notification about AI accessibility
                     const statusBarMessage = vscode.window.setStatusBarMessage(
                         `$(check) Query complete: ${results.rowCount} rows | $(hubot) AI result ID: ${resultId}`,
@@ -563,6 +576,19 @@ export class QueryExecutor {
                         connection.database,
                         `kustox-webview://${tabTitle}`
                     );
+                    
+                    // Auto-open VFS file if enabled (helps GitHub Copilot include it in context)
+                    const config = vscode.workspace.getConfiguration('kustox.ai');
+                    const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
+                    
+                    if (autoOpenVFS) {
+                        const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
+                        vscode.commands.executeCommand('vscode.open', vfsUri, {
+                            viewColumn: vscode.ViewColumn.Beside,
+                            preserveFocus: true,
+                            preview: true
+                        });
+                    }
                 }
             }
         });

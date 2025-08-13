@@ -10,6 +10,7 @@ import { VFSTreeProvider } from './vfs/vfsTreeProvider';
 // Global connection state
 let kustoConnection: KustoConnection | null = null;
 let connectionStatusBarItem: vscode.StatusBarItem;
+let vfsToggleStatusBarItem: vscode.StatusBarItem;
 let resultsFileSystem: QueryResultsFileSystemProvider;
 
 function updateConnectionStatus() {
@@ -25,6 +26,22 @@ function updateConnectionStatus() {
     connectionStatusBarItem.show();
 }
 
+function updateVFSToggleStatus() {
+    const config = vscode.workspace.getConfiguration('kustox.ai');
+    const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
+    
+    if (autoOpenVFS) {
+        vfsToggleStatusBarItem.text = `$(eye) VFS Auto-Open ON`;
+        vfsToggleStatusBarItem.tooltip = 'VFS Auto-Open is ON - Query results will open automatically alongside .kql files for GitHub Copilot. Click to toggle.';
+        vfsToggleStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+    } else {
+        vfsToggleStatusBarItem.text = `$(eye-closed) VFS Auto-Open OFF`;
+        vfsToggleStatusBarItem.tooltip = 'VFS Auto-Open is OFF - Query results are only in tree view. Click to toggle.';
+        vfsToggleStatusBarItem.backgroundColor = undefined;
+    }
+    vfsToggleStatusBarItem.show();
+}
+
 export function activate(context: vscode.ExtensionContext) {
     // Initialize Virtual File System for AI access (single file mode)
     resultsFileSystem = QueryResultsFileSystemProvider.register(context);
@@ -34,6 +51,12 @@ export function activate(context: vscode.ExtensionContext) {
     connectionStatusBarItem.command = 'kustox.configureConnection';
     updateConnectionStatus();
     context.subscriptions.push(connectionStatusBarItem);
+
+    // Create VFS toggle status bar item
+    vfsToggleStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+    vfsToggleStatusBarItem.command = 'kustox.toggleVFSAutoOpen';
+    updateVFSToggleStatus();
+    context.subscriptions.push(vfsToggleStatusBarItem);
 
     // Create the connection tree provider
     const connectionProvider = new ConnectionTreeProvider(context);
@@ -329,6 +352,25 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(statsMessage, { modal: true });
     });
 
+    const toggleVFSAutoOpen = vscode.commands.registerCommand('kustox.toggleVFSAutoOpen', async () => {
+        const config = vscode.workspace.getConfiguration('kustox.ai');
+        const currentValue = config.get<boolean>('autoOpenVFS', false);
+        const newValue = !currentValue;
+        
+        await config.update('autoOpenVFS', newValue, vscode.ConfigurationTarget.Global);
+        
+        // Update status bar
+        updateVFSToggleStatus();
+        
+        const status = newValue ? 'ON' : 'OFF';
+        const message = `VFS Auto-Open is now ${status}`;
+        const detail = newValue 
+            ? 'Query results will automatically open in a file alongside the .kql file to help GitHub Copilot include them in context.'
+            : 'Query results will only be available in the VFS tree view and visual display.';
+        
+        vscode.window.showInformationMessage(`${message}\n\n${detail}`, { modal: true });
+    });
+
     // Push all commands to subscriptions
     context.subscriptions.push(
         openExplorer, 
@@ -350,7 +392,8 @@ export function activate(context: vscode.ExtensionContext) {
         openResultsExplorer,
         exportResultsForAI,
         clearResultCache,
-        showStorageStats
+        showStorageStats,
+        toggleVFSAutoOpen
     );
 
     // Show a welcome message when the extension activates
@@ -361,6 +404,9 @@ export function deactivate() {
     kustoConnection = null;
     if (connectionStatusBarItem) {
         connectionStatusBarItem.dispose();
+    }
+    if (vfsToggleStatusBarItem) {
+        vfsToggleStatusBarItem.dispose();
     }
 }
 

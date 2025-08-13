@@ -186,6 +186,12 @@
         "title": "Show Storage Statistics",
         "category": "KustoX",
         "icon": "$(graph-line)"
+      },
+      {
+        "command": "kustox.toggleVFSAutoOpen",
+        "title": "Toggle VFS Auto-Open",
+        "category": "KustoX",
+        "icon": "$(eye)"
       }
     ],
     "views": {
@@ -232,7 +238,7 @@
           "group": "navigation@3"
         },
         {
-          "command": "kustox.analyzeWithAI",
+          "command": "kustox.toggleVFSAutoOpen",
           "when": "resourceExtname == .kql || resourceExtname == .kusto",
           "group": "ai@1"
         }
@@ -308,6 +314,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically make query results available to AI agents"
+        },
+        "kustox.ai.autoOpenVFS": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically open VFS result file when query is executed (helps GitHub Copilot include it in context)"
         }
       }
     }

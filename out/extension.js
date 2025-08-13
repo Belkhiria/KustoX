@@ -35,6 +35,7 @@ const vfsTreeProvider_1 = require("./vfs/vfsTreeProvider");
 let kustoConnection = null;
 exports.kustoConnection = kustoConnection;
 let connectionStatusBarItem;
+let vfsToggleStatusBarItem;
 let resultsFileSystem;
 exports.resultsFileSystem = resultsFileSystem;
 function updateConnectionStatus() {
@@ -51,6 +52,21 @@ function updateConnectionStatus() {
     connectionStatusBarItem.show();
 }
 exports.updateConnectionStatus = updateConnectionStatus;
+function updateVFSToggleStatus() {
+    const config = vscode.workspace.getConfiguration('kustox.ai');
+    const autoOpenVFS = config.get('autoOpenVFS', false);
+    if (autoOpenVFS) {
+        vfsToggleStatusBarItem.text = `$(eye) VFS Auto-Open ON`;
+        vfsToggleStatusBarItem.tooltip = 'VFS Auto-Open is ON - Query results will open automatically alongside .kql files for GitHub Copilot. Click to toggle.';
+        vfsToggleStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+    }
+    else {
+        vfsToggleStatusBarItem.text = `$(eye-closed) VFS Auto-Open OFF`;
+        vfsToggleStatusBarItem.tooltip = 'VFS Auto-Open is OFF - Query results are only in tree view. Click to toggle.';
+        vfsToggleStatusBarItem.backgroundColor = undefined;
+    }
+    vfsToggleStatusBarItem.show();
+}
 function activate(context) {
     // Initialize Virtual File System for AI access (single file mode)
     exports.resultsFileSystem = resultsFileSystem = queryResultsFileSystem_1.QueryResultsFileSystemProvider.register(context);
@@ -59,6 +75,11 @@ function activate(context) {
     connectionStatusBarItem.command = 'kustox.configureConnection';
     updateConnectionStatus();
     context.subscriptions.push(connectionStatusBarItem);
+    // Create VFS toggle status bar item
+    vfsToggleStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+    vfsToggleStatusBarItem.command = 'kustox.toggleVFSAutoOpen';
+    updateVFSToggleStatus();
+    context.subscriptions.push(vfsToggleStatusBarItem);
     // Create the connection tree provider
     const connectionProvider = new connectionTreeProvider_1.ConnectionTreeProvider(context);
     vscode.window.registerTreeDataProvider('kustoxConnections', connectionProvider);
@@ -306,8 +327,22 @@ function activate(context) {
 • Ephemeral storage only (no disk persistence)`;
         vscode.window.showInformationMessage(statsMessage, { modal: true });
     });
+    const toggleVFSAutoOpen = vscode.commands.registerCommand('kustox.toggleVFSAutoOpen', async () => {
+        const config = vscode.workspace.getConfiguration('kustox.ai');
+        const currentValue = config.get('autoOpenVFS', false);
+        const newValue = !currentValue;
+        await config.update('autoOpenVFS', newValue, vscode.ConfigurationTarget.Global);
+        // Update status bar
+        updateVFSToggleStatus();
+        const status = newValue ? 'ON' : 'OFF';
+        const message = `VFS Auto-Open is now ${status}`;
+        const detail = newValue
+            ? 'Query results will automatically open in a file alongside the .kql file to help GitHub Copilot include them in context.'
+            : 'Query results will only be available in the VFS tree view and visual display.';
+        vscode.window.showInformationMessage(`${message}\n\n${detail}`, { modal: true });
+    });
     // Push all commands to subscriptions
-    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, editClusterNameCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand, openResultsExplorer, exportResultsForAI, clearResultCache, showStorageStats);
+    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, editClusterNameCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand, openResultsExplorer, exportResultsForAI, clearResultCache, showStorageStats, toggleVFSAutoOpen);
     // Show a welcome message when the extension activates
     vscode.window.showInformationMessage('KustoX extension loaded! Use "KustoX: Configure Connection" to connect to your cluster.');
 }
@@ -316,6 +351,9 @@ function deactivate() {
     exports.kustoConnection = kustoConnection = null;
     if (connectionStatusBarItem) {
         connectionStatusBarItem.dispose();
+    }
+    if (vfsToggleStatusBarItem) {
+        vfsToggleStatusBarItem.dispose();
     }
 }
 exports.deactivate = deactivate;
