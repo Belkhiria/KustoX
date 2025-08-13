@@ -1,10 +1,17 @@
 # KustoX - Modern Kusto Explorer
 
-KustoX is a powerful Visual Studio Code extension designed to modernize and simplify your data exploration workflow. Effortlessly write, run, and visualize queries with an intuitive interface—bringing the best of Kusto Explorer directly into VS Code.
+KustoX is a powerful Visual Studio Code extension designed to modernize and simplify your data exploration workflow with AI capabilities. Effortlessly write, run, and visualize queries with an intuitive interface—bringing the best of Kusto Explorer directly into VS Code.
 
 ## ✨ Key Features
 
-### 🌳 Connection Tree (New!)
+### 🤖 AI Integration (New!)
+- **Virtual File System**: Query results accessible to AI agents like Copilot Studio
+- **Multiple Formats**: JSON, CSV, Markdown, and AI-optimized data exports
+- **Dual Analysis**: Visual tables for humans + structured data for AI
+- **Smart Context**: AI gets query metadata, schema, and analysis hints
+- **Configurable Storage**: Memory, disk, or hybrid persistence modes
+
+### 🌳 Connection Tree
 - **Kusto Explorer-like Interface**: Familiar tree view for managing clusters and databases
 - **Auto-Discovery**: Automatically detect and display all available databases
 - **Azure Authentication**: Seamless integration with Azure identity for secure connections
@@ -47,6 +54,38 @@ code --install-extension kustox
 2. Click on any database to connect
 3. Create a new `.kql` file or use **"KustoX: Create New Kusto File"**
 4. Press **F5** or click **Run** to execute queries
+
+## 🤖 AI Integration
+
+KustoX automatically makes query results accessible to AI agents while preserving the visual table experience:
+
+### How It Works
+1. **Execute queries normally** - results appear in beautiful visual tables/charts
+2. **AI gets structured access** - data is simultaneously cached in Virtual File System
+3. **Multiple formats available** - JSON, CSV, Markdown, and AI-optimized exports
+4. **Best of both worlds** - humans use visual tools, AI analyzes structured data
+
+### AI Commands
+- **Analyze with AI** - Access AI analysis options for query results
+- **Open Results Explorer** - Browse the Virtual File System
+- **Export for AI** - Get AI-optimized data format
+- **Storage Stats** - View cache statistics and configuration
+
+### Configuration
+```json
+{
+  "kustox.results.storageMode": "hybrid",
+  "kustox.results.maxMemoryResults": 100,
+  "kustox.results.retentionDays": 30
+}
+```
+
+**Storage Modes:**
+- `memory` - Temporary, fast access
+- `disk` - Persistent, survives restarts  
+- `hybrid` - Memory cache + disk backup (recommended)
+
+For detailed AI integration documentation, see [AI-INTEGRATION.md](./AI-INTEGRATION.md).
 
 ## 📋 Example Queries
 

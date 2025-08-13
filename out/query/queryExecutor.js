@@ -33,8 +33,9 @@ const responseProcessor_1 = require("../kusto/responseProcessor");
 const errorHandler_1 = require("../error/errorHandler");
 const webviewManager_1 = require("../webview/webviewManager");
 class QueryExecutor {
-    constructor(getConnection) {
+    constructor(getConnection, resultsFileSystem) {
         this.getConnection = getConnection;
+        this.resultsFileSystem = resultsFileSystem;
     }
     cleanQuery(query) {
         const lines = query.split('\n');
@@ -332,6 +333,13 @@ class QueryExecutor {
                 progress.report({ increment: 80, message: "Processing results..." });
                 // Process the response using official patterns
                 const results = (0, responseProcessor_1.processKustoResponse)(response, executionTime);
+                // Add to Virtual File System for AI access
+                if (this.resultsFileSystem && results.hasData) {
+                    const resultId = this.resultsFileSystem.addQueryResult(queryToExecute, results, connection.cluster, connection.database, 'kustox-webview://current');
+                    // Show subtle notification about AI accessibility
+                    const statusBarMessage = vscode.window.setStatusBarMessage(`$(check) Query complete: ${results.rowCount} rows | $(hubot) AI result ID: ${resultId}`, 10000 // Show for 10 seconds
+                    );
+                }
                 // Add detailed debugging for blank results
                 if (!results.hasData || results.rowCount === 0) {
                     // Show a message to user about no results
@@ -432,7 +440,12 @@ class QueryExecutor {
                 (0, webviewManager_1.showQueryError)(result.query, result.error, connection, tabTitle);
             }
             else if (result.result) {
+                // Show visual results
                 (0, webviewManager_1.showQueryResults)(result.query, result.result, connection, tabTitle);
+                // Add to VFS for AI access
+                if (this.resultsFileSystem && result.result.hasData) {
+                    const resultId = this.resultsFileSystem.addQueryResult(result.query, result.result, connection.cluster, connection.database, `kustox-webview://${tabTitle}`);
+                }
             }
         });
     }

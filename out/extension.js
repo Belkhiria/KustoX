@@ -23,16 +23,20 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateConnectionStatus = exports.kustoConnection = exports.deactivate = exports.activate = void 0;
+exports.resultsFileSystem = exports.updateConnectionStatus = exports.kustoConnection = exports.deactivate = exports.activate = void 0;
 const vscode = __importStar(require("vscode"));
 const connectionTreeProvider_1 = require("./connection/connectionTreeProvider");
 const connectionConfigurator_1 = require("./connection/connectionConfigurator");
 const queryExecutor_1 = require("./query/queryExecutor");
 const mockDataGenerator_1 = require("./mockData/mockDataGenerator");
+const queryResultsFileSystem_1 = require("./vfs/queryResultsFileSystem");
+const vfsTreeProvider_1 = require("./vfs/vfsTreeProvider");
 // Global connection state
 let kustoConnection = null;
 exports.kustoConnection = kustoConnection;
 let connectionStatusBarItem;
+let resultsFileSystem;
+exports.resultsFileSystem = resultsFileSystem;
 function updateConnectionStatus() {
     if (kustoConnection) {
         connectionStatusBarItem.text = `$(database) ${kustoConnection.cluster.split('//')[1]} / ${kustoConnection.database}`;
@@ -48,6 +52,8 @@ function updateConnectionStatus() {
 }
 exports.updateConnectionStatus = updateConnectionStatus;
 function activate(context) {
+    // Initialize Virtual File System for AI access (single file mode)
+    exports.resultsFileSystem = resultsFileSystem = queryResultsFileSystem_1.QueryResultsFileSystemProvider.register(context);
     // Create status bar item
     connectionStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     connectionStatusBarItem.command = 'kustox.configureConnection';
@@ -56,13 +62,16 @@ function activate(context) {
     // Create the connection tree provider
     const connectionProvider = new connectionTreeProvider_1.ConnectionTreeProvider(context);
     vscode.window.registerTreeDataProvider('kustoxConnections', connectionProvider);
+    // Create VFS tree provider
+    const vfsTreeProvider = new vfsTreeProvider_1.VFSTreeProvider(resultsFileSystem);
+    vscode.window.registerTreeDataProvider('kustoxVFS', vfsTreeProvider);
     // Create utility instances
     const connectionConfigurator = new connectionConfigurator_1.ConnectionConfigurator((connection) => {
         exports.kustoConnection = kustoConnection = connection;
         updateConnectionStatus();
         connectionProvider.refresh();
     }, updateConnectionStatus);
-    const queryExecutor = new queryExecutor_1.QueryExecutor(() => kustoConnection);
+    const queryExecutor = new queryExecutor_1.QueryExecutor(() => kustoConnection, resultsFileSystem);
     // Register commands
     const openExplorer = vscode.commands.registerCommand('kustox.openExplorer', () => {
         vscode.commands.executeCommand('kustoxConnections.focus');
@@ -247,8 +256,58 @@ function activate(context) {
         showQueryResults('MockQuery | take 100', mockResult, mockConnection, 'Mock Data Test');
         vscode.window.showInformationMessage(`Mock data generated: ${mockResult.rowCount} rows, ${mockResult.columns.length} columns`);
     });
+    const openResultsExplorer = vscode.commands.registerCommand('kustox.openResultsExplorer', async () => {
+        try {
+            const uri = vscode.Uri.parse('kustox-ai://results/');
+            await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
+            vscode.window.showInformationMessage('Query results are now accessible in the virtual file system');
+        }
+        catch (error) {
+            // Fallback: just open the README
+            const readmeUri = vscode.Uri.parse('kustox-ai://results/README.md');
+            await vscode.window.showTextDocument(readmeUri);
+            vscode.window.showInformationMessage('AI can access query results through this virtual file system.');
+        }
+    });
+    const exportResultsForAI = vscode.commands.registerCommand('kustox.exportResultsForAI', async () => {
+        const results = resultsFileSystem.getAllResults();
+        if (results.length === 0) {
+            vscode.window.showWarningMessage('No query results available. Execute a query first.');
+            return;
+        }
+        const latestResult = results[results.length - 1];
+        const uri = vscode.Uri.parse(`kustox-ai://results/history/${latestResult.id}/result.json`);
+        await vscode.window.showTextDocument(uri);
+        vscode.window.showInformationMessage('JSON result format opened. AI agents can now analyze this data.');
+    });
+    const clearResultCache = vscode.commands.registerCommand('kustox.clearResultCache', async () => {
+        const answer = await vscode.window.showWarningMessage('Clear all cached query results?', 'Yes', 'No');
+        if (answer === 'Yes') {
+            resultsFileSystem.clearCache();
+            vscode.window.showInformationMessage('Query result cache cleared.');
+        }
+    });
+    const showStorageStats = vscode.commands.registerCommand('kustox.showStorageStats', async () => {
+        const stats = resultsFileSystem.getStorageStats();
+        const statsMessage = `KustoX Query Results Storage:
+
+📊 **Current Statistics**
+• Storage Mode: Ephemeral (session-only)
+• Results in Memory: ${stats.memoryCount}
+• Total Memory Usage: ${stats.totalSizeMB.toFixed(2)} MB
+
+🤖 **AI Integration**
+• Results are automatically available to AI agents
+• Visual tables remain unchanged for manual analysis  
+• Format: JSON only (simplified for AI access)
+
+⚙️ **Configuration**
+• Adjust memory limit: kustox.results.maxMemoryResults
+• Ephemeral storage only (no disk persistence)`;
+        vscode.window.showInformationMessage(statsMessage, { modal: true });
+    });
     // Push all commands to subscriptions
-    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, editClusterNameCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand);
+    context.subscriptions.push(openExplorer, helloWorld, createKustoFile, configureConnectionCommand, executeQueryCommand, disconnectKusto, showConnectionStatus, addClusterCommand, refreshConnectionsCommand, connectToDatabaseCommand, removeClusterCommand, editClusterNameCommand, copyConnectionStringCommand, insertTableNameCommand, refreshTablesCommand, testWithMockDataCommand, openResultsExplorer, exportResultsForAI, clearResultCache, showStorageStats);
     // Show a welcome message when the extension activates
     vscode.window.showInformationMessage('KustoX extension loaded! Use "KustoX: Configure Connection" to connect to your cluster.');
 }

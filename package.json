@@ -162,6 +162,30 @@
         "title": "Copy Chart",
         "category": "KustoX",
         "icon": "$(graph)"
+      },
+      {
+        "command": "kustox.openResultsExplorer",
+        "title": "Open Results Explorer (VFS)",
+        "category": "KustoX",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "kustox.exportResultsForAI",
+        "title": "Export Results for AI Analysis",
+        "category": "KustoX",
+        "icon": "$(export)"
+      },
+      {
+        "command": "kustox.clearResultCache",
+        "title": "Clear Result Cache",
+        "category": "KustoX",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "kustox.showStorageStats",
+        "title": "Show Storage Statistics",
+        "category": "KustoX",
+        "icon": "$(graph-line)"
       }
     ],
     "views": {
@@ -171,6 +195,13 @@
           "name": "Kusto Clusters",
           "when": "true",
           "icon": "$(server-environment)",
+          "visibility": "visible"
+        },
+        {
+          "id": "kustoxVFS",
+          "name": "AI Query Results",
+          "when": "true",
+          "icon": "$(files)",
           "visibility": "visible"
         }
       ],
@@ -199,6 +230,11 @@
           "command": "kustox.showConnectionStatus",
           "when": "resourceExtname == .kql || resourceExtname == .kusto",
           "group": "navigation@3"
+        },
+        {
+          "command": "kustox.analyzeWithAI",
+          "when": "resourceExtname == .kql || resourceExtname == .kusto",
+          "group": "ai@1"
         }
       ],
       "view/title": [
@@ -257,7 +293,24 @@
         "key": "f5",
         "when": "resourceLangId == kusto"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "KustoX",
+      "properties": {
+        "kustox.results.maxMemoryResults": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "Maximum number of results to keep in memory (ephemeral storage)"
+        },
+        "kustox.ai.autoExport": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically make query results available to AI agents"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

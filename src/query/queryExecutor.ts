@@ -8,9 +8,13 @@ import { loadKustoSDK, getClientRequestProperties, generateUUID } from '../kusto
 import { processKustoResponse } from '../kusto/responseProcessor';
 import { parseKustoError } from '../error/errorHandler';
 import { showQueryResults, showQueryError } from '../webview/webviewManager';
+import { QueryResultsFileSystemProvider } from '../vfs/queryResultsFileSystem';
 
 export class QueryExecutor {
-    constructor(private getConnection: () => KustoConnection | null) {}
+    constructor(
+        private getConnection: () => KustoConnection | null,
+        private resultsFileSystem?: QueryResultsFileSystemProvider
+    ) {}
 
     private cleanQuery(query: string): string {
         const lines = query.split('\n');
@@ -386,6 +390,23 @@ export class QueryExecutor {
                 // Process the response using official patterns
                 const results = processKustoResponse(response, executionTime);
                 
+                // Add to Virtual File System for AI access
+                if (this.resultsFileSystem && results.hasData) {
+                    const resultId = this.resultsFileSystem.addQueryResult(
+                        queryToExecute,
+                        results,
+                        connection.cluster,
+                        connection.database,
+                        'kustox-webview://current'
+                    );
+                    
+                    // Show subtle notification about AI accessibility
+                    const statusBarMessage = vscode.window.setStatusBarMessage(
+                        `$(check) Query complete: ${results.rowCount} rows | $(hubot) AI result ID: ${resultId}`,
+                        10000  // Show for 10 seconds
+                    );
+                }
+                
                 // Add detailed debugging for blank results
                 
                 if (!results.hasData || results.rowCount === 0) {
@@ -530,7 +551,19 @@ export class QueryExecutor {
             if (result.error) {
                 showQueryError(result.query, result.error, connection, tabTitle);
             } else if (result.result) {
+                // Show visual results
                 showQueryResults(result.query, result.result, connection, tabTitle);
+                
+                // Add to VFS for AI access
+                if (this.resultsFileSystem && result.result.hasData) {
+                    const resultId = this.resultsFileSystem.addQueryResult(
+                        result.query,
+                        result.result,
+                        connection.cluster,
+                        connection.database,
+                        `kustox-webview://${tabTitle}`
+                    );
+                }
             }
         });
     }
