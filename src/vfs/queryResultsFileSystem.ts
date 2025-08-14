@@ -23,9 +23,16 @@ export interface QueryResultEntry {
  * Ephemeral single-file storage - overwrites with each new query result
  */
 export class QueryResultsFileSystemProvider implements vscode.FileSystemProvider {
-    private static readonly SCHEME = 'kustox-ai';
-    private static readonly AUTHORITY = 'results';
-    private static readonly SINGLE_FILE_PATH = '/latest-result.json';
+    static readonly SCHEME = 'kustox-ai';
+    static readonly AUTHORITY = 'results';
+    static readonly SINGLE_FILE_PATH = '/latest-result.json';
+    
+    // Make scheme and authority publicly accessible
+    static getScheme(): string { return QueryResultsFileSystemProvider.SCHEME; }
+    static getAuthority(): string { return QueryResultsFileSystemProvider.AUTHORITY; }
+    static getLatestFileUri(): vscode.Uri {
+        return vscode.Uri.parse(`${QueryResultsFileSystemProvider.SCHEME}://${QueryResultsFileSystemProvider.AUTHORITY}${QueryResultsFileSystemProvider.SINGLE_FILE_PATH}`);
+    }
     
     private currentResult: QueryResultEntry | null = null;
     private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
@@ -37,37 +44,8 @@ export class QueryResultsFileSystemProvider implements vscode.FileSystemProvider
     private fileContents = new Map<string, Uint8Array>();
 
     constructor(context: vscode.ExtensionContext) {
-        // Create initial README
-        this.createReadme();
-    }
-
-    private createReadme() {
-        const readmeContent = `# KustoX AI Bridge - Latest Query Result (Session Only)
-
-This virtual file system provides AI agents access to the most recent query result.
-
-## Single File System
-- Only one file is maintained: latest-result.json
-- Each new query execution overwrites the previous result
-- No history is kept - only the current result is available
-- Results are stored in memory only and will be lost when VS Code closes
-
-## How it works:
-1. Execute queries normally - results appear in the visual table/chart view
-2. Latest result is cached here in memory for AI analysis during the session
-3. AI agents can read the structured data while you work with the visual display
-4. New queries automatically replace the previous result
-
-## Available file:
-- latest-result.json: Most recent query result with metadata (JSON format)
-
-## Usage:
-- Visual tables remain your primary interface for manual troubleshooting
-- AI agents use latest-result.json for automated analysis of current query
-- Simple single-file approach - no history management needed
-- Session-only storage ensures data privacy
-`;
-        this.storeFile('/README.md', readmeContent);
+        // No automatic files created - VFS starts empty
+        // Only JSON results will be stored when queries are executed
     }
 
     /**
@@ -192,9 +170,7 @@ This virtual file system provides AI agents access to the most recent query resu
         this.currentResult = null;
         this.fileContents.clear();
         
-        // Recreate README after clear
-        this.createReadme();
-        
+        // Fire deletion event for the JSON file if it existed
         this._emitter.fire([{
             type: vscode.FileChangeType.Deleted,
             uri: vscode.Uri.parse(`${QueryResultsFileSystemProvider.SCHEME}://${QueryResultsFileSystemProvider.AUTHORITY}${QueryResultsFileSystemProvider.SINGLE_FILE_PATH}`)
@@ -217,11 +193,16 @@ This virtual file system provides AI agents access to the most recent query resu
     }
 
     // FileSystemProvider implementation
-    watch(): vscode.Disposable {
+    watch(uri: vscode.Uri): vscode.Disposable {
+        // Return empty disposable - we don't support file watching
+        // This prevents VS Code from trying to watch this as a workspace folder
         return new vscode.Disposable(() => {});
     }
 
     stat(uri: vscode.Uri): vscode.FileStat {
+        const path = uri.path;
+        
+        // Handle specific files we know about
         if (this.fileContents.has(uri.toString())) {
             return {
                 type: vscode.FileType.File,
@@ -230,36 +211,53 @@ This virtual file system provides AI agents access to the most recent query resu
                 size: this.fileContents.get(uri.toString())?.length || 0
             };
         }
-        return {
-            type: vscode.FileType.Directory,
-            ctime: Date.now(),
-            mtime: Date.now(),
-            size: 0
-        };
+        
+        // Only allow the root directory - don't pretend other directories exist
+        if (path === '/' || path === '') {
+            return {
+                type: vscode.FileType.Directory,
+                ctime: Date.now(),
+                mtime: Date.now(),
+                size: 0
+            };
+        }
+        
+        // Throw FileNotFound for any other paths to prevent VS Code from treating this as a workspace
+        throw vscode.FileSystemError.FileNotFound();
     }
 
     readDirectory(uri: vscode.Uri): [string, vscode.FileType][] {
         const path = uri.path;
-        const entries: [string, vscode.FileType][] = [];
         
+        // Only allow listing the root directory
         if (path === '/' || path === '') {
-            entries.push(['README.md', vscode.FileType.File]);
+            const entries: [string, vscode.FileType][] = [];
             // Only show the single result file if it exists
             if (this.currentResult) {
                 entries.push(['latest-result.json', vscode.FileType.File]);
             }
+            
+            // Log when Copilot is accessing the directory for debugging
+            console.log('VFS: Directory listing requested, returning:', entries.length > 0 ? ['latest-result.json'] : 'empty');
+            return entries;
         }
         
-        return entries;
+        // Don't allow listing any subdirectories - throw error to prevent workspace detection
+        throw vscode.FileSystemError.FileNotFound();
     }
 
     createDirectory(): void {}
 
     readFile(uri: vscode.Uri): Uint8Array {
+        console.log('VFS: File read requested for:', uri.toString());
+        
         const content = this.fileContents.get(uri.toString());
         if (content) {
+            console.log('VFS: Returning file content, size:', content.length, 'bytes');
             return content;
         }
+        
+        console.log('VFS: File not found:', uri.path);
         throw vscode.FileSystemError.FileNotFound();
     }
 
@@ -277,13 +275,18 @@ This virtual file system provides AI agents access to the most recent query resu
 
     static register(context: vscode.ExtensionContext): QueryResultsFileSystemProvider {
         const provider = new QueryResultsFileSystemProvider(context);
-        context.subscriptions.push(
-            vscode.workspace.registerFileSystemProvider(
-                QueryResultsFileSystemProvider.SCHEME,
-                provider,
-                { isCaseSensitive: true }
-            )
+        
+        // Register with readonly flag to prevent workspace folder detection
+        const disposable = vscode.workspace.registerFileSystemProvider(
+            QueryResultsFileSystemProvider.SCHEME,
+            provider,
+            { 
+                isCaseSensitive: true,
+                isReadonly: false // Allow writes for our JSON files
+            }
         );
+        
+        context.subscriptions.push(disposable);
         return provider;
     }
 }

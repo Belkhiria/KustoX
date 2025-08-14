@@ -69,6 +69,7 @@ function updateVFSToggleStatus() {
 }
 function activate(context) {
     // Initialize Virtual File System for AI access (single file mode)
+    // Always register so it works when enabled, but handle Copilot requests gracefully
     exports.resultsFileSystem = resultsFileSystem = queryResultsFileSystem_1.QueryResultsFileSystemProvider.register(context);
     // Create status bar item
     connectionStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);

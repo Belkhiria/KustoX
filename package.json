@@ -1,8 +1,8 @@
 {
   "name": "kustox",
   "displayName": "KustoX - Modern Kusto Explorer",
-  "description": "A powerful Visual Studio Code extension to modernize and simplify your data exploration workflow with AI capabilities",
-  "version": "0.1.1",
+  "description": "The most advanced VS Code extension for Azure Data Explorer/Kusto with revolutionary Virtual File System (VFS) and AI training capabilities",
+  "version": "0.2.0",
   "publisher": "kustox",
   "license": "AGPL-3.0",
   "repository": {

@@ -7,10 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Extended chart visualization options
+- Enhanced IntelliSense with context-aware suggestions
+- Performance optimizations for large datasets
+
+## [0.2.0] - 2025-01-XX
+
+### Added - Revolutionary VFS Foundation
+- **Industry-First Virtual File System (VFS)**: `kustox-ai://results/` scheme for real-time AI access to query results
+- **Dual-Access Architecture**: Simultaneous visual experience for humans and structured access for AI
+- **Smart Results Management**: Automatic tab prioritization (JSON focus, HTML background)
+- **VFS Explorer Commands**: Browse and manage AI-accessible query results
+- **Enhanced Configuration**: VFS management options and storage modes
+- **AI Integration Foundation**: Architecture ready for advanced ML features
+
+### Improved
+- **Tab Focus Management**: Better handling of JSON/HTML result prioritization
+- **Error Handling**: More robust VFS and connection management
+- **Performance**: Optimized caching system with configurable memory/disk hybrid storage
+- **Documentation**: Comprehensive README updates highlighting VFS advantages
+
+### Fixed
+- **VFS Workspace Issues**: Resolved workspace folder detection conflicts
+- **Copilot Integration**: Fixed parsing errors in automatic context provision
+- **Tab Behavior**: Proper focus management for different result formats
+
+### Coming in v0.3.0
+- **Advanced AI Training System**: ML integration that learns from query patterns
+- **Copilot Chat Integration**: Dedicated `@kustox` chat participant with deep contextual understanding
+- **Intelligent Query Suggestions**: AI-powered KQL recommendations based on usage patterns
+- **Custom Model Training**: Build domain-specific knowledge from data exploration patterns
+
+## [0.1.1] - 2025-01-XX
+
 ### Added
-- Open source preparation
-- Comprehensive documentation improvements
-- Code cleanup and optimization
+- Basic AI integration capabilities
+- Virtual File System foundation
+- Query results accessibility for AI agents
+
+### Fixed
+- Connection stability improvements
+- Error handling enhancements
 
 ## [0.1.0] - 2025-08-08
 
