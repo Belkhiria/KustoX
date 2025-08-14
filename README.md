@@ -1,34 +1,61 @@
-# KustoX - Modern Kusto Explorer 🚀
+# KustoX - Modern Kusto Explorer 🚀 (BETA)
 
-**The most advanced Visual Studio Code extension for Azure Data Explorer/Kusto with revolutionary AI integration**
+**🚧 BETA RELEASE: The most advanced Visual Studio Code extension for Azure Data Explorer/Kusto with revolutionary unified AAD authentication and AI integration**
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=kustox.kustox)
+> ⚠️ **This is a BETA release** - Early access to cutting-edge features. Please test thoroughly and [provide feedback](https://github.com/Belkhiria/KustoX/issues).
+
+[![Version](https://img.shields.io/badge/version-0.2.2--beta-orange.svg)](https://marketplace.visualstudio.com/items?itemName=kustox.kustox)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![AI-Powered](https://img.shields.io/badge/AI-Powered%20VFS-purple.svg)](#-revolutionary-ai-integration)
+[![Beta](https://img.shields.io/badge/status-BETA-orange.svg)](#-beta-features-early-access)
 [![Downloads](https://img.shields.io/badge/downloads-1K+-brightgreen.svg)](https://marketplace.visualstudio.com/items?itemName=kustox.kustox)
 
-> 🌟 **NEW in v0.2.0**: Industry-first Virtual File System (VFS) with real-time AI integration!
+> 🌟 **NEW in v0.2.2-beta**: Revolutionary unified AAD authentication with automatic MFA support!
 > 
-> **Experience the future of data exploration** - Beautiful visualizations for humans + instant AI access simultaneously
+> **Experience seamless Azure connectivity** - Single authentication method for both Azure Data Explorer and Fabric Eventhouse
 
 ---
 
-## 🎉 What's New in v0.2.0
+## 🚧 Beta Features (Early Access)
 
-### 🌟 Industry-First Virtual File System (VFS)
-- **Revolutionary dual-access architecture** - Visual experience for humans, structured access for AI
-- **Real-time AI integration** - Query results instantly available via `kustox-ai://results/` scheme
-- **Zero compromise** - Beautiful visualizations AND AI capabilities simultaneously
+### 🔐 Unified AAD Authentication (NEW!)
+- **Single authentication method** - One unified approach for all Azure Data Explorer and Fabric Eventhouse connections
+- **Automatic MFA support** - Seamless multi-factor authentication handling through modern `withUserPrompt()` method
+- **Silent authentication mode** - Background token refresh for uninterrupted workflow
+- **Enhanced reliability** - Upgraded to latest Azure SDK (azure-kusto-data 7.0.1, azure-kusto-ingest 7.0.1)
+- **Breaking change**: Replaces complex legacy authentication paths with modern unified approach
 
-### ⚡ Enhanced Performance & Reliability
-- **Smart caching system** - Configurable memory/disk hybrid storage for optimal performance
-- **Improved VFS management** - Better tab handling and focus management for JSON/HTML results
-- **Enhanced error handling** - More robust connection management and query execution
+### ⚠️ Beta Disclaimer
+This beta release includes experimental authentication improvements. While thoroughly tested, please:
+- Test authentication in your environment before production use
+- Keep existing Kusto tools available as backup during beta testing
+- [Report any issues](https://github.com/Belkhiria/KustoX/issues) to help improve the stable release
+- Provide feedback on the new unified authentication experience
 
-### 🔮 Foundation for Advanced AI (Coming in v0.3.0)
-- **AI Training System Architecture** - Infrastructure ready for machine learning integration
-- **Copilot Chat Integration Framework** - Prepared for dedicated `@kustox` chat participant
-- **Pattern Recognition Foundation** - Ready for intelligent query suggestions based on usage patterns
+---
+
+## 🎉 What's New in v0.2.2-beta
+
+## � What's New in v0.2.2-beta
+
+### 🔐 Revolutionary Unified Authentication 
+- **Single authentication method** - Unified `AuthenticationManager` handles all Azure scenarios
+- **Automatic MFA support** - Modern `withUserPrompt()` method for seamless multi-factor authentication
+- **Silent authentication mode** - Background token refresh prevents workflow interruptions
+- **Enhanced compatibility** - Works with both Azure Data Explorer clusters and Fabric Eventhouse
+- **Upgraded Azure SDK** - Latest azure-kusto-data 7.0.1 and azure-kusto-ingest 7.0.1 for maximum reliability
+
+### ⚡ Improved Reliability & Performance
+- **Simplified connection flow** - Single unified method replaces complex legacy authentication paths
+- **Better error handling** - Comprehensive authentication error messages and recovery guidance
+- **Modern token management** - Automatic token refresh and expiration handling
+- **Corporate environment support** - Enhanced compatibility with enterprise AAD configurations
+
+### � Beta Testing Features
+- **Comprehensive testing guide** - Detailed authentication testing instructions included
+- **Feedback collection system** - Easy issue reporting and feature request submission
+- **Performance monitoring** - Built-in diagnostics for authentication flow optimization
+- **Backward compatibility** - Graceful fallback for edge cases during beta period
 
 ---
 
@@ -79,26 +106,37 @@ KustoX is a powerful Visual Studio Code extension designed to modernize and simp
 - **Kusto-Specific Messages**: Precise error locations and suggestions
 - **Troubleshooting Tips**: Built-in guidance for common query issues
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Beta Installation)
 
-### 1. Install the Extension
+### 1. Install the Beta Extension
+**Option A: Direct VSIX Installation (Recommended for Beta)**
 ```bash
-# From VS Code Marketplace or
+# Download kustox-0.2.2-beta.vsix from releases and install
+code --install-extension kustox-0.2.2-beta.vsix
+```
+
+**Option B: From VS Code Marketplace (when available)**
+```bash
 code --install-extension kustox
 ```
 
-### 2. Add Your First Cluster
+> ⚠️ **Beta Notice**: This beta version includes experimental unified authentication. Keep your existing Kusto tools available as backup during testing.
+
+### 2. Add Your First Cluster (Enhanced Authentication)
 1. Open the **Explorer** panel in VS Code
 2. Look for the **"Kusto Clusters"** tree view
 3. Click the **"+"** button to add a cluster
-4. Enter your cluster URL: `https://your-cluster.kusto.windows.net`
-5. Authenticate with Azure when prompted
+4. Enter your cluster URL: 
+   - Azure Data Explorer: `https://your-cluster.kusto.windows.net`
+   - Fabric Eventhouse: `https://your-workspace.kusto.fabric.microsoft.com`
+5. **NEW**: Experience seamless unified AAD authentication with automatic MFA support
 
-### 3. Connect and Query
+### 3. Connect and Query (Beta Features)
 1. Expand your cluster in the tree view
-2. Click on any database to connect
+2. Click on any database to connect (enjoy faster, more reliable authentication!)
 3. Create a new `.kql` file or use **"KustoX: Create New Kusto File"**
 4. Press **F5** or click **Run** to execute queries
+5. **Beta Feedback**: [Report any authentication issues](https://github.com/Belkhiria/KustoX/issues) to help improve the stable release
 
 ## 🤖 Revolutionary AI Integration
 
