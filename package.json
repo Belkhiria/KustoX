@@ -349,8 +349,8 @@
     "@azure/identity": "^4.10.2",
     "@azure/msal-node": "^3.6.4",
     "@types/azure-kusto-data": "^0.2.2",
-    "azure-kusto-data": "^5.2.3",
-    "azure-kusto-ingest": "^5.2.3",
+    "azure-kusto-data": "^7.0.1",
+    "azure-kusto-ingest": "^7.0.1",
     "uuid": "^11.1.0"
   }
 }
