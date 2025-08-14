@@ -1,0 +1,17 @@
+// Basic Fabric workspace test queries
+// For cluster: https://trd-e6gsbc3m91sdyjur5c.z2.kusto.fabric.microsoft.com
+
+// Test 1: Simple connectivity test
+print "Hello Fabric Workspace"
+
+// Test 2: Check available databases
+.show databases
+
+// Test 3: List tables in your database (replace 'YourDatabase' with actual database name)
+// .show tables
+
+// Test 4: Simple count query (replace 'TableName' with actual table)
+// TableName | count
+
+// Test 5: Basic data sample (replace 'TableName' with actual table)
+// TableName | take 10

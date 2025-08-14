@@ -71,7 +71,7 @@ export class ConnectionConfigurator {
             const authMethod = await vscode.window.showQuickPick([
                 {
                     label: '🌐 Interactive Browser (Recommended)',
-                    detail: 'Browser authentication - works with any Azure AD account',
+                    detail: 'Browser authentication - works with ADX, Fabric, and any Azure AD account',
                     method: 'interactive'
                 },
                 {
@@ -120,16 +120,9 @@ export class ConnectionConfigurator {
 
                 switch (authMethod.method) {
                     case 'interactive':
-                        // Silent browser authentication - no unnecessary popups
-                        // Try to use Azure AD authentication with tenant hint for better experience
-                        try {
-                            // First try with Azure AD authentication which may be more silent
-                            kcsb = KustoConnectionStringBuilder.withAadUserAuthentication(clusterUrl, 'common');
-                        } catch (error) {
-                            // Fallback to user prompt if Azure AD method fails
-                            console.log('KustoX: Falling back to user prompt authentication');
-                            kcsb = (KustoConnectionStringBuilder as any).withUserPrompt(clusterUrl);
-                        }
+                        // Simple browser authentication - just like Kusto Explorer
+                        // Use withUserPrompt which automatically handles tenant detection for ADX, Fabric, etc.
+                        kcsb = (KustoConnectionStringBuilder as any).withUserPrompt(clusterUrl);
                         break;
                         
                     case 'custom-client-id':

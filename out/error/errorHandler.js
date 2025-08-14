@@ -39,6 +39,27 @@ function parseKustoError(error) {
                 category = 'Authentication';
                 severity = 'Error';
                 summary = 'Authentication failed';
+                // Fabric-specific authentication guidance
+                if (errorStr.includes('fabric.microsoft.com')) {
+                    details = 'Microsoft Fabric authentication failed. Try:\n' +
+                        '1. Use "Microsoft Fabric Authentication" method\n' +
+                        '2. Specify your organization\'s tenant ID\n' +
+                        '3. Ensure you have access to the Fabric workspace\n' +
+                        '4. Check if your account has the required permissions';
+                }
+            }
+            else if (errorStr.includes('FORBIDDEN') || errorStr.includes('403') || errorStr.includes('access denied')) {
+                category = 'Authorization';
+                severity = 'Error';
+                summary = 'Access denied';
+                // Fabric-specific authorization guidance
+                if (errorStr.includes('fabric.microsoft.com')) {
+                    details = 'Access denied to Microsoft Fabric workspace. Verify:\n' +
+                        '1. You have the correct permissions in the Fabric workspace\n' +
+                        '2. Your account is added to the workspace\n' +
+                        '3. The workspace exists and is accessible\n' +
+                        '4. Try re-authenticating with the correct tenant';
+                }
             }
             else if (errorStr.includes('TIMEOUT') || errorStr.includes('timeout')) {
                 category = 'Timeout';
