@@ -1,25 +1,28 @@
-# KustoX - Modern Kusto Explorer 🚀 (BETA)
+# KustoX - Modern Kusto Explorer & Microsoft Fabric 🚀 (BETA)
 
-**🚧 BETA RELEASE: The most advanced Visual Studio Code extension for Azure Data Explorer/Kusto with revolutionary unified AAD authentication and AI integration**
+**🚧 BETA RELEASE: The most advanced Visual Studio Code extension for Azure Data Explorer/Kusto and Microsoft Fabric Eventhouse with revolutionary unified AAD authentication and AI integration**
 
 > ⚠️ **This is a BETA release** - Early access to cutting-edge features. Please test thoroughly and [provide feedback](https://github.com/Belkhiria/KustoX/issues).
 
 [![Version](https://img.shields.io/badge/version-0.2.2--beta-orange.svg)](https://marketplace.visualstudio.com/items?itemName=kustox.kustox)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![AI-Powered](https://img.shields.io/badge/AI-Powered%20VFS-purple.svg)](#-revolutionary-ai-integration)
+[![Fabric](https://img.shields.io/badge/Microsoft-Fabric-blue.svg)](#-unified-authentication-new)
 [![Beta](https://img.shields.io/badge/status-BETA-orange.svg)](#-beta-features-early-access)
 [![Downloads](https://img.shields.io/badge/downloads-1K+-brightgreen.svg)](https://marketplace.visualstudio.com/items?itemName=kustox.kustox)
 
 > 🌟 **NEW in v0.2.2-beta**: Revolutionary unified AAD authentication with automatic MFA support!
 > 
-> **Experience seamless Azure connectivity** - Single authentication method for both Azure Data Explorer and Fabric Eventhouse
+> **Experience seamless connectivity** - Single authentication method for Azure Data Explorer clusters and Microsoft Fabric Eventhouse databases
 
 ---
+
+**KustoX transforms your data exploration workflow with unified support for both Azure Data Explorer and Microsoft Fabric Eventhouse. Effortlessly write, run, and visualize KQL queries with an intuitive interface—bringing the best of both platforms directly into VS Code.**
 
 ## 🚧 Beta Features (Early Access)
 
 ### 🔐 Unified AAD Authentication (NEW!)
-- **Single authentication method** - One unified approach for all Azure Data Explorer and Fabric Eventhouse connections
+- **Universal connectivity** - Single authentication method for Azure Data Explorer clusters and Microsoft Fabric Eventhouse databases
 - **Automatic MFA support** - Seamless multi-factor authentication handling through modern `withUserPrompt()` method
 - **Silent authentication mode** - Background token refresh for uninterrupted workflow
 - **Enhanced reliability** - Upgraded to latest Azure SDK (azure-kusto-data 7.0.1, azure-kusto-ingest 7.0.1)
