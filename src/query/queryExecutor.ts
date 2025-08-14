@@ -400,19 +400,6 @@ export class QueryExecutor {
                         'kustox-webview://current'
                     );
                     
-                    // Auto-open VFS file if enabled (helps GitHub Copilot include it in context)
-                    const config = vscode.workspace.getConfiguration('kustox.ai');
-                    const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
-                    
-                    if (autoOpenVFS) {
-                        const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
-                        vscode.commands.executeCommand('vscode.open', vfsUri, {
-                            viewColumn: vscode.ViewColumn.Beside,
-                            preserveFocus: true,
-                            preview: true
-                        });
-                    }
-                    
                     // Show subtle notification about AI accessibility
                     const statusBarMessage = vscode.window.setStatusBarMessage(
                         `$(check) Query complete: ${results.rowCount} rows | $(hubot) AI result ID: ${resultId}`,
@@ -441,8 +428,24 @@ export class QueryExecutor {
                     return;
                 }
                 
-                // Show the results
+                // Check if VFS auto-open is enabled to control tab focus
+                const config = vscode.workspace.getConfiguration('kustox.ai');
+                const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
+                
+                // Show the HTML results first (will be background tab when VFS is enabled)
                 showQueryResults(queryToExecute, results, connection, queryName);
+                
+                // Then open VFS file if enabled (will become the active tab)
+                if (autoOpenVFS) {
+                    setTimeout(() => {
+                        const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
+                        vscode.commands.executeCommand('vscode.open', vfsUri, {
+                            viewColumn: vscode.ViewColumn.Active,
+                            preserveFocus: false,  // Give focus to VFS file
+                            preview: false         // Don't make it a preview tab
+                        });
+                    }, 100); // Small delay to ensure HTML view is created first
+                }
 
                 progress.report({ increment: 100, message: "Query completed!" });
             });
@@ -564,10 +567,7 @@ export class QueryExecutor {
             if (result.error) {
                 showQueryError(result.query, result.error, connection, tabTitle);
             } else if (result.result) {
-                // Show visual results
-                showQueryResults(result.query, result.result, connection, tabTitle);
-                
-                // Add to VFS for AI access
+                // Add to VFS for AI access first
                 if (this.resultsFileSystem && result.result.hasData) {
                     const resultId = this.resultsFileSystem.addQueryResult(
                         result.query,
@@ -576,19 +576,24 @@ export class QueryExecutor {
                         connection.database,
                         `kustox-webview://${tabTitle}`
                     );
-                    
-                    // Auto-open VFS file if enabled (helps GitHub Copilot include it in context)
-                    const config = vscode.workspace.getConfiguration('kustox.ai');
-                    const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
-                    
-                    if (autoOpenVFS) {
+                }
+                
+                // Show visual results first
+                showQueryResults(result.query, result.result, connection, tabTitle);
+                
+                // Then open VFS file if enabled (will become the active tab)
+                const config = vscode.workspace.getConfiguration('kustox.ai');
+                const autoOpenVFS = config.get<boolean>('autoOpenVFS', false);
+                
+                if (autoOpenVFS && this.resultsFileSystem && result.result.hasData) {
+                    setTimeout(() => {
                         const vfsUri = vscode.Uri.parse('kustox-ai://results/latest-result.json');
                         vscode.commands.executeCommand('vscode.open', vfsUri, {
-                            viewColumn: vscode.ViewColumn.Beside,
-                            preserveFocus: true,
-                            preview: true
+                            viewColumn: vscode.ViewColumn.Active,
+                            preserveFocus: false,  // Give focus to VFS file
+                            preview: false         // Don't make it a preview tab
                         });
-                    }
+                    }, 100); // Small delay to ensure HTML view is created first
                 }
             }
         });
