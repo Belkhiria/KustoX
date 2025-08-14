@@ -1,17 +1,32 @@
-// Basic Fabric workspace test queries
+// Fabric Eventhouse Debugging Queries
 // For cluster: https://trd-e6gsbc3m91sdyjur5c.z2.kusto.fabric.microsoft.com
 
-// Test 1: Simple connectivity test
-print "Hello Fabric Workspace"
+// Test 1: Basic connection test (special debug command)
+debug fabric
 
-// Test 2: Check available databases
+// Test 2: Simple connectivity test
+print "Hello Fabric Eventhouse"
+
+// Test 3: Check current database info
+print database_name=current_database()
+
+// Test 4: List all databases you have access to
 .show databases
 
-// Test 3: List tables in your database (replace 'YourDatabase' with actual database name)
-// .show tables
+// Test 5: Check your permissions
+.show principal access
 
-// Test 4: Simple count query (replace 'TableName' with actual table)
-// TableName | count
+// Test 6: List tables in current database
+.show tables
 
-// Test 5: Basic data sample (replace 'TableName' with actual table)
-// TableName | take 10
+// Test 7: Check cluster info
+.show cluster
+
+// Test 8: Simple time query (should always work)
+print now()
+
+// Test 9: If you have tables, try this pattern:
+// YourTableName | take 5
+
+// Common Fabric Eventhouse database names to try:
+// - Replace "YourDatabase" in connection with actual database name from .show databases result

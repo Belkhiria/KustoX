@@ -351,6 +351,37 @@ export class QueryExecutor {
             }
         }
 
+        // Add Fabric-specific debugging
+        const isFabricCluster = connection.cluster.includes('fabric.microsoft.com');
+        if (isFabricCluster && queryToExecute.trim().toLowerCase() === 'debug fabric') {
+            try {
+                // Test basic connectivity
+                const basicTest = await connection.client.execute(connection.database, 'print "Fabric connection test"');
+                
+                // Test database access
+                const dbTest = await connection.client.execute(connection.database, '.show databases');
+                
+                vscode.window.showInformationMessage(
+                    `✅ Fabric Eventhouse connection successful!\n` +
+                    `• Cluster: ${connection.cluster}\n` +
+                    `• Database: ${connection.database}\n` +
+                    `• Basic query: Working\n` +
+                    `• Database access: Working`
+                );
+                return;
+            } catch (fabricError) {
+                const errorMsg = fabricError instanceof Error ? fabricError.message : String(fabricError);
+                vscode.window.showErrorMessage(
+                    `❌ Fabric Eventhouse test failed:\n${errorMsg}\n\n` +
+                    `Try:\n` +
+                    `• Check database name is correct\n` +
+                    `• Verify you have access to this Eventhouse\n` +
+                    `• Run simple query: print "test"`
+                );
+                return;
+            }
+        }
+
         // Initialize variables outside progress callback for error handling access
         const startTime = Date.now();
         const ClientRequestProperties = getClientRequestProperties();
@@ -451,16 +482,56 @@ export class QueryExecutor {
             });
 
         } catch (error) {
-            // Enhanced error handling for detailed Kusto errors
+            // Enhanced error handling for detailed Kusto errors with Fabric-specific guidance
             
             // Check if it's an axios error with response details
             const errorObj = error as any;
             if (errorObj.response) {
+                console.error('HTTP Response Error:', errorObj.response.status, errorObj.response.data);
             }
             if (errorObj.config) {
+                console.error('Request config:', errorObj.config.url, errorObj.config.method);
             }
             
             let detailedError = parseKustoError(error);
+            
+            // Add Fabric-specific error handling
+            const isFabricCluster = connection.cluster.includes('fabric.microsoft.com');
+            if (isFabricCluster) {
+                // Common Fabric Eventhouse issues
+                if (detailedError.summary.includes('401') || detailedError.summary.includes('Unauthorized')) {
+                    detailedError.summary = 'Fabric Eventhouse Authentication Failed';
+                    detailedError.details = `Authentication failed for Fabric Eventhouse.\n\n` +
+                                          `Troubleshooting steps:\n` +
+                                          `• Ensure you have access to this Fabric workspace\n` +
+                                          `• Check if you're logged into the correct Azure AD tenant\n` +
+                                          `• Verify the Eventhouse cluster URL is correct\n` +
+                                          `• Try disconnecting and reconnecting with fresh authentication`;
+                } else if (detailedError.summary.includes('403') || detailedError.summary.includes('Forbidden')) {
+                    detailedError.summary = 'Fabric Eventhouse Access Denied';
+                    detailedError.details = `Access denied to Fabric Eventhouse.\n\n` +
+                                          `Possible causes:\n` +
+                                          `• You don't have permission to access this Eventhouse\n` +
+                                          `• The database name might be incorrect\n` +
+                                          `• The Eventhouse might be in a different workspace\n` +
+                                          `• Contact your Fabric administrator for access`;
+                } else if (detailedError.summary.includes('NotFound') || detailedError.summary.includes('404')) {
+                    detailedError.summary = 'Fabric Eventhouse Database Not Found';
+                    detailedError.details = `Database not found in Fabric Eventhouse.\n\n` +
+                                          `Check:\n` +
+                                          `• Database name is spelled correctly\n` +
+                                          `• Database exists in this Eventhouse\n` +
+                                          `• You have access to the specific database\n` +
+                                          `• Try running: .show databases`;
+                } else if (detailedError.summary.includes('CORS') || detailedError.summary.includes('cors')) {
+                    detailedError.summary = 'Fabric Eventhouse CORS Issue';
+                    detailedError.details = `Network/CORS error connecting to Fabric Eventhouse.\n\n` +
+                                          `This might be a temporary network issue:\n` +
+                                          `• Check your internet connection\n` +
+                                          `• Try again in a few moments\n` +
+                                          `• Ensure the cluster URL is accessible`;
+                }
+            }
             
             console.error('Query execution error:', error);
             console.error('Parsed error details:', detailedError);
