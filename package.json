@@ -320,6 +320,11 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically open VFS result file when query is executed (helps GitHub Copilot include it in context)"
+        },
+        "kustox.auth.silentMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable silent authentication mode to minimize browser notifications and popups"
         }
       }
     }

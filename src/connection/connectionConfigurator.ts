@@ -120,14 +120,16 @@ export class ConnectionConfigurator {
 
                 switch (authMethod.method) {
                     case 'interactive':
-                        // Interactive browser authentication - ORIGINAL WORKING METHOD RESTORED!
-                        vscode.window.showInformationMessage(
-                            'Browser Authentication: Opening browser for Azure AD authentication...',
-                            'Continue'
-                        );
-                        
-                        // Use the original withUserPrompt method that directly opens browser
-                        kcsb = (KustoConnectionStringBuilder as any).withUserPrompt(clusterUrl);
+                        // Silent browser authentication - no unnecessary popups
+                        // Try to use Azure AD authentication with tenant hint for better experience
+                        try {
+                            // First try with Azure AD authentication which may be more silent
+                            kcsb = KustoConnectionStringBuilder.withAadUserAuthentication(clusterUrl, 'common');
+                        } catch (error) {
+                            // Fallback to user prompt if Azure AD method fails
+                            console.log('KustoX: Falling back to user prompt authentication');
+                            kcsb = (KustoConnectionStringBuilder as any).withUserPrompt(clusterUrl);
+                        }
                         break;
                         
                     case 'custom-client-id':
@@ -169,14 +171,9 @@ export class ConnectionConfigurator {
                         break;
                         
                     case 'device-code':
-                        // Device code authentication with better user guidance
-                        vscode.window.showInformationMessage(
-                            'Device Code Authentication will require you to authenticate in your browser. Please complete the authentication when prompted.',
-                            'Continue'
-                        );
-                        
+                        // Device code authentication - streamlined flow
                         kcsb = KustoConnectionStringBuilder.withAadDeviceAuthentication(clusterUrl, 'common', (tokenResponse: any) => {
-                            const message = `Device Code Authentication Required:\n\nCode: ${tokenResponse.userCode}\n\nPlease visit: ${tokenResponse.verificationUrl}\n\nAfter completing authentication, the connection will proceed automatically.`;
+                            const message = `Device Code: ${tokenResponse.userCode}\n\nVisit: ${tokenResponse.verificationUrl}`;
                             
                             try {
                                 // Validate URL before opening
@@ -195,19 +192,18 @@ export class ConnectionConfigurator {
                                             vscode.env.openExternal(vscode.Uri.parse(validUrl.toString()));
                                         } else if (selection === 'Copy Code') {
                                             vscode.env.clipboard.writeText(tokenResponse.userCode);
-                                            vscode.window.showInformationMessage(`Code copied to clipboard: ${tokenResponse.userCode}`);
                                         }
                                     });
                                 } else {
                                     vscode.window.showWarningMessage(
-                                        `Authentication required. Code: ${tokenResponse.userCode}\nURL: ${tokenResponse.verificationUrl}`,
+                                        `Code: ${tokenResponse.userCode} | URL: ${tokenResponse.verificationUrl}`,
                                         'Copy Code'
                                     );
                                 }
                             } catch (error) {
                                 console.error('URL validation error:', error);
                                 vscode.window.showWarningMessage(
-                                    `Authentication required. Please manually visit the URL.\nCode: ${tokenResponse.userCode}\nURL: ${tokenResponse.verificationUrl}`,
+                                    `Code: ${tokenResponse.userCode} | URL: ${tokenResponse.verificationUrl}`,
                                     'Copy Code'
                                 ).then(selection => {
                                     if (selection === 'Copy Code') {
@@ -219,12 +215,7 @@ export class ConnectionConfigurator {
                         break;
                         
                     case 'azurecli':
-                        // Azure CLI authentication - works without requiring az login
-                        vscode.window.showInformationMessage(
-                            'Azure CLI Authentication: This will use your current Azure credentials.',
-                            'Continue'
-                        );
-                        
+                        // Azure CLI authentication - silent when credentials available
                         kcsb = KustoConnectionStringBuilder.withAadDeviceAuthentication(clusterUrl, 'common');
                         break;
                         
