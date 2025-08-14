@@ -56,12 +56,64 @@ export class ConnectionConfigurator {
                 }
             });
 
-            // Get database name
-            const database = await vscode.window.showInputBox({
-                prompt: 'Enter database name',
-                placeHolder: 'Samples',
-                value: 'Samples' // Default to Samples database for general use
-            });
+            // Get database name/ID - handle both regular ADX and Fabric Eventhouse formats
+            const isFabricCluster = clusterUrl.includes('fabric.microsoft.com');
+            
+            let database: string | undefined;
+            
+            if (isFabricCluster) {
+                // For Fabric, offer to auto-detect or manual entry
+                const fabricDbChoice = await vscode.window.showQuickPick([
+                    {
+                        label: '🔍 Auto-detect Database',
+                        detail: 'Connect and show available databases to choose from',
+                        method: 'auto-detect'
+                    },
+                    {
+                        label: '✏️ Enter Database ID Manually',
+                        detail: 'Enter the GUID database ID (e.g., b3ecde0f-93e1-446d-9b3f-c1ce9a34024f)',
+                        method: 'manual'
+                    }
+                ], {
+                    placeHolder: 'How would you like to specify the Fabric Eventhouse database?'
+                });
+
+                if (!fabricDbChoice) {
+                    return;
+                }
+
+                if (fabricDbChoice.method === 'manual') {
+                    database = await vscode.window.showInputBox({
+                        prompt: 'Enter Fabric Eventhouse database ID (GUID)',
+                        placeHolder: 'b3ecde0f-93e1-446d-9b3f-c1ce9a34024f',
+                        validateInput: (value) => {
+                            if (!value || value.trim() === '') {
+                                return 'Database ID is required';
+                            }
+                            const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                            if (!guidRegex.test(value.trim())) {
+                                return 'Please enter a valid GUID format (e.g., b3ecde0f-93e1-446d-9b3f-c1ce9a34024f)';
+                            }
+                            return null;
+                        }
+                    });
+                } else {
+                    // Auto-detect will be handled after authentication
+                    database = 'auto-detect';
+                }
+            } else {
+                // Regular ADX cluster
+                database = await vscode.window.showInputBox({
+                    prompt: 'Enter database name',
+                    placeHolder: 'Samples',
+                    validateInput: (value) => {
+                        if (!value || value.trim() === '') {
+                            return 'Database name is required';
+                        }
+                        return null;
+                    }
+                });
+            }
 
             if (!database) {
                 return;
@@ -258,10 +310,58 @@ export class ConnectionConfigurator {
                 
                 progress.report({ increment: 80, message: "Testing connection..." });
 
+                // Handle auto-detection for Fabric Eventhouse
+                let finalDatabase: string = database || '';
+                if (database === 'auto-detect') {
+                    progress.report({ message: "Auto-detecting Fabric databases..." });
+                    
+                    try {
+                        // Try to get list of databases
+                        const dbListResponse = await client.execute('', '.show databases');
+                        const databases: any[] = [];
+                        
+                        // Process the response to extract database names/IDs
+                        if (dbListResponse && dbListResponse.primaryResults && dbListResponse.primaryResults[0]) {
+                            const dbTable = dbListResponse.primaryResults[0];
+                            for (const row of dbTable.data) {
+                                if (row.DatabaseName) {
+                                    databases.push({
+                                        label: row.DatabaseName,
+                                        detail: `ID: ${row.DatabaseName}`,
+                                        id: row.DatabaseName
+                                    });
+                                }
+                            }
+                        }
+                        
+                        if (databases.length === 0) {
+                            throw new Error('No databases found or insufficient permissions');
+                        }
+                        
+                        // Let user choose from available databases
+                        const selectedDb = await vscode.window.showQuickPick(databases, {
+                            placeHolder: 'Select a database from your Fabric Eventhouse'
+                        });
+                        
+                        if (!selectedDb) {
+                            vscode.window.showErrorMessage('No database selected. Connection cancelled.');
+                            return;
+                        }
+                        
+                        finalDatabase = selectedDb.id;
+                        
+                    } catch (dbError) {
+                        vscode.window.showErrorMessage(
+                            'Could not auto-detect databases. Please enter the database ID manually.',
+                            'Retry with Manual Entry'
+                        );
+                        return;
+                    }
+                }
+
                 // Test the connection with a simple query with timeout
-                
                 const testResponse = await Promise.race([
-                    client.execute(database, 'print "Connection test successful"'),
+                    client.execute(finalDatabase, 'print "Connection test successful"'),
                     new Promise((_, reject) => 
                         setTimeout(() => reject(new Error('Connection test timeout after 30 seconds. This might be due to pending authentication. Please check if authentication is required in your browser.')), 30000)
                     )
@@ -273,14 +373,14 @@ export class ConnectionConfigurator {
                 const connection: KustoConnection = {
                     client,
                     cluster: clusterUrl,
-                    database,
+                    database: finalDatabase,
                     alias: clusterAlias?.trim() || undefined
                 };
 
                 this.setConnection(connection);
                 this.updateStatusCallback();
 
-                vscode.window.showInformationMessage(`✅ Successfully connected to ${clusterUrl}/${database}`);
+                vscode.window.showInformationMessage(`✅ Successfully connected to ${clusterUrl}/${finalDatabase}`);
             });
 
         } catch (error) {
