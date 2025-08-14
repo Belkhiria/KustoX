@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced IntelliSense with context-aware suggestions
 - Performance optimizations for large datasets
 
+## [0.2.1] - 2025-08-14
+
+### Added
+- **Professional Extension Icon**: Added KustoXIcon.png for better marketplace visibility and brand recognition
+- **Enhanced UI**: Extension now displays custom icon in VS Code marketplace and extension list
+
+### Improved
+- **Visual Identity**: Better brand recognition in VS Code extension marketplace
+- **User Experience**: Professional appearance in extension manager and UI elements
+
 ## [0.2.0] - 2025-01-XX
 
 ### Added - Revolutionary VFS Foundation
