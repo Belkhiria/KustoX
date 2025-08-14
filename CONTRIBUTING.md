@@ -270,7 +270,7 @@ Contributors will be:
 
 ## 📄 License
 
-By contributing to KustoX, you agree that your contributions will be licensed under the MIT License.
+By contributing to KustoX, you agree that your contributions will be licensed under the same project KustoX License.
 
 ## 🙏 Thank You
 

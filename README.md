@@ -233,13 +233,6 @@ StormEvents
 - **Easy Removal**: Right-click to remove unused clusters
 - **Copy Connection Strings**: Quick access to connection details
 
-## 📚 Documentation
-
-- **[Connection Tree Guide](CONNECTION_TREE.md)**: Comprehensive guide to cluster management
-- **[Syntax Highlighting](SYNTAX_HIGHLIGHTING.md)**: Details about KQL language support
-- **[Error Reporting](ERROR_REPORTING.md)**: Understanding enhanced error messages
-- **[Chart Visualization](CHART_VISUALIZATION.md)**: Working with data visualizations
-
 ## 🛠️ Development
 
 ### Prerequisites
