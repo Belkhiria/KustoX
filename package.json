@@ -2,7 +2,7 @@
   "name": "kustox",
   "displayName": "KustoX - Modern Kusto Explorer & Microsoft Fabric (Beta)",
   "description": "🚧 BETA: The most advanced VS Code extension for Azure Data Explorer/Kusto and Microsoft Fabric Eventhouse with revolutionary unified AAD authentication, Virtual File System (VFS) and AI training capabilities",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "publisher": "kustox",
   "icon": "Icon/KustoXIcon.png",
   "license": "AGPL-3.0",

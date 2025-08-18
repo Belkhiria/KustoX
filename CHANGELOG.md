@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced IntelliSense with context-aware suggestions
 - Performance optimizations for large datasets
 
+## [0.2.4] - 2025-08-18
+
+### Changed
+- **Publish as stable**: Released as stable version instead of pre-release
+
+## [0.2.3] - 2025-08-18
+
+### Fixed
+- **Microsoft Fabric Authentication**: Resolved authentication issues with Microsoft Fabric Eventhouse using updated Azure SDK
+- **ADX Cluster Connectivity**: Fixed authentication problems with certain Azure Data Explorer clusters using new SDK version
+- **Enhanced Authentication Flow**: Improved reliability of AAD authentication across different cluster configurations
+
 ## [0.2.1] - 2025-08-14
 
 ### Added
